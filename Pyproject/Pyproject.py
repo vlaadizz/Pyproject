@@ -10,6 +10,11 @@ from kivy.uix.button import Button
 from kivy.uix.recycleview import RecycleView
 from kivy.properties import ListProperty
 from kivy.core.window import Window
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.clock import Clock
+from kivy.uix.recycleview.views import RecycleDataViewBehavior
+
 Window.size = (390, 844)
 
 #Регистрация шрифтов
@@ -22,10 +27,155 @@ LabelBase.register(name="Gilroy-SemiBold", fn_regular="C:/Users/vbzai/OneDrive/D
 store = JsonStore("user.json")
 daily_store = JsonStore("daily.json")
 
-class TimePicker(RecycleView):
-    def init(self, values, **kwargs):
-        super().init(**kwargs)
-        self.data = [{"text": v, "font_size": "42sp"} for v in values]
+class PickerItem(Button):
+    """Элемент для выбора времени"""
+    index = NumericProperty(0)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint_y = None
+        self.height = 60
+        self.font_size = '34sp'
+        self.font_name = 'Gilroy-Medium'
+        self.color = (0.7137, 0.5294, 0.5294, 1)
+        self.background_normal = ''
+        self.background_color = (0, 0, 0, 0)
+
+class TimePickerColumn(RecycleView):
+    """Колонка выбора времени с прокруткой"""
+    selected_value = NumericProperty(0)
+    on_selected = None
+    
+    def __init__(self, values, **kwargs):
+        super().__init__(**kwargs)
+        self.values = values
+        self.size_hint_x = 0.25
+        self.do_scroll_x = False
+        self.do_scroll_y = True
+        self.bar_width = 0
+        self.bar_color = (0, 0, 0, 0)
+        self.bar_inactive_color = (0, 0, 0, 0)
+        
+        # Контейнер для кнопок
+        self.container = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            spacing=5,
+            padding=[0, 10, 0, 10]
+        )
+        
+        # Создаем кнопки для каждого значения
+        self.buttons = []
+        for i, value in enumerate(values):
+            btn = PickerItem(
+                text=str(value),
+                index=i
+            )
+            btn.bind(on_release=self._on_button_press)
+            self.container.add_widget(btn)
+            self.buttons.append(btn)
+        
+        # Вычисляем высоту контейнера
+        self.container.height = len(values) * 65 + 20
+        self.add_widget(self.container)
+        
+        # Центрируем выбранное значение
+        Clock.schedule_once(self._center_selected, 0.2)
+    
+    def _on_button_press(self, btn):
+        """Обработка нажатия на кнопку"""
+        self.selected_value = self.values[btn.index]
+        if self.on_selected:
+            self.on_selected(self.selected_value)
+        self._center_to_button(btn.index)
+    
+    def _center_to_button(self, index):
+        """Центрирует скролл к выбранной кнопке"""
+        button_y = index * 65
+        target_y = button_y - self.height / 2 + 30
+        scroll_y = 1 - (target_y / (self.container.height - self.height))
+        scroll_y = max(0, min(1, scroll_y))
+        self.scroll_y = scroll_y
+    
+    def _center_selected(self, dt):
+        """Центрирует скролл к выбранному значению"""
+        try:
+            index = self.values.index(self.selected_value)
+            self._center_to_button(index)
+        except ValueError:
+            pass
+    
+    def set_selected(self, value):
+        """Устанавливает выбранное значение"""
+        try:
+            index = self.values.index(value)
+            self.selected_value = value
+            self._center_to_button(index)
+        except ValueError:
+            pass
+
+class ModernTimePicker(BoxLayout):
+    """Современный TimePicker с прокруткой"""
+    hour = NumericProperty(23)
+    minute = NumericProperty(0)
+    
+    def __init__(self, **kwargs):
+        kwargs.setdefault('spacing', 0)
+        kwargs.setdefault('padding', [5, 0])
+        super().__init__(**kwargs)
+        self.orientation = 'horizontal'
+        self.size_hint_y = None
+        self.height = 200
+        
+        # Часы (0-23)
+        self.hours_list = list(range(0, 24))
+        self.hours_picker = TimePickerColumn(self.hours_list)
+        self.hours_picker.on_selected = self.on_hour_selected
+        self.hours_picker.selected_value = self.hour
+        self.hours_picker.size_hint_x = 0.45  # Уменьшение ширины
+        
+        # Разделитель ":"
+        separator = Label(
+            text=":",
+            font_size="42sp",
+            color=(0.7137, 0.5294, 0.5294, 1),
+            size_hint_x=None,
+            width=15,
+            font_name="Gilroy-Medium"
+        )
+        
+        # Минуты (00, 10, 20, 30, 40, 50)
+        self.minutes_list = [0, 10, 20, 30, 40, 50]
+        self.minutes_picker = TimePickerColumn(self.minutes_list)
+        self.minutes_picker.on_selected = self.on_minute_selected
+        self.minutes_picker.selected_value = self.minute
+        self.minutes_picker.size_hint_x = 0.45  # Уменьшение ширины
+        
+        self.add_widget(self.hours_picker)
+        self.add_widget(separator)
+        self.add_widget(self.minutes_picker)
+        
+        # Устанавливаем начальные значения
+        Clock.schedule_once(self._set_initial_values, 0.3)
+    
+    def on_hour_selected(self, value):
+        self.hour = value
+        print(f"Час выбран: {value}")
+    
+    def on_minute_selected(self, value):
+        self.minute = value
+        print(f"Минута выбрана: {value}")
+    
+    def _set_initial_values(self, dt):
+        """Устанавливает начальные значения"""
+        self.hours_picker.set_selected(self.hour)
+        self.minutes_picker.set_selected(self.minute)
+    
+    def on_hour(self, instance, value):
+        self.hours_picker.set_selected(value)
+    
+    def on_minute(self, instance, value):
+        self.minutes_picker.set_selected(value)
 
 
 class RangeButton(Button):
@@ -46,7 +196,6 @@ except:
         locale.setlocale(locale.LC_TIME, 'UTF-8') 
     except:
         locale.setlocale(locale.LC_TIME, '')
-
 
 class WelcomeScreen(Screen):
     pass
@@ -177,6 +326,7 @@ class WaterScreen(Screen):
 
     def update_display(self):
         self.ids.water_label.text = f"{self.water_amount}/{self.max_water} ml"
+
 class StepsScreen(Screen):
     selected_steps = NumericProperty(0)
 
@@ -198,9 +348,27 @@ class SleepScreen(Screen):
     wake_hour = NumericProperty(7)
     wake_min = NumericProperty(0)
 
+    def on_enter(self):
+        # Синхронизируем значения с TimePicker
+        try:
+            if hasattr(self.ids, 'sleep_time'):
+                self.ids.sleep_time.hour = self.sleep_hour
+                self.ids.sleep_time.minute = self.sleep_min
+        except:
+            pass
+
+        try:
+            if hasattr(self.ids, 'wake_time'):
+                self.ids.wake_time.hour = self.wake_hour
+                self.ids.wake_time.minute = self.wake_min
+        except:
+            pass
+
     def go_next(self):
-        print("Сон:", self.sleep_time, "-", self.wake_time)
-        # переход дальше
+        print("Сон:", f"{self.sleep_hour:02d}:{self.sleep_min:02d}", 
+              "-", f"{self.wake_hour:02d}:{self.wake_min:02d}")
+        app = App.get_running_app()
+        app.go_to_mood()
 
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.properties import NumericProperty, ListProperty, StringProperty
@@ -1339,23 +1507,43 @@ kv_string = '''
             rgba: root.border_color
         Line:
             width: 1.0
-            rounded_rectangle: (self.x, self.y, self.width, self.height, 30)            
+            rounded_rectangle: (self.x, self.y, self.width, self.height, 30)
+
+<ModernTimePicker>:
+    size_hint_y: None
+    height: 200
+
+<PickerItem>:
+    size_hint_y: None
+    height: 60
+    font_size: '34sp'
+    font_name: 'Gilroy-Medium'
+    color: (0.7137, 0.5294, 0.5294, 1)
+    background_normal: ''
+    background_color: (0, 0, 0, 0)
+
+<TimePickerColumn>:
+    bar_width: 0
+    bar_color: (0, 0, 0, 0)
+    bar_inactive_color: (0, 0, 0, 0)
 
 <SleepScreen>:
     FloatLayout:
-        canvas.before:
-            Rectangle:
-                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"   # твой фон
-                size: self.size
-                pos: self.pos
+        # Фон
+        Image:
+            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+            allow_stretch: True
+            keep_ratio: False
+            size: self.parent.size
+            pos: self.parent.pos
 
         # Заголовок
         Label:
             text: "Сон"
             font_name: "Gilroy-Medium"
             font_size: "36sp"
-            color:  0.7137, 0.5294, 0.5294, 1
-            pos_hint: {"x": -0.32, "y": 0.41}
+            color: 0.7137, 0.5294, 0.5294, 1
+            pos_hint: {"x": 0.07, "y": 0.41}
 
         # Кнопка назад "<"
         Button:
@@ -1374,142 +1562,132 @@ kv_string = '''
             text: "Введи примерно сколько\\nты сегодня спал"
             font_name: "Gilroy-Medium"
             halign: "left"
-            color:  0.7137, 0.5294, 0.5294, 1
+            color: 0.7137, 0.5294, 0.5294, 1
             font_size: "20sp"
-            pos_hint: {"x": 0.1, "y": 0.3}
+            pos_hint: {"x": 0.07, "y": 0.3}
             text_size: self.width, None
 
-        # КАРТОЧКА – СОН
+        # Карточка - Время для сна
         BoxLayout:
+            id: sleep_card  # Добавлен id для карточки
             orientation: "vertical"
-            size_hint: .9, .24
-            pos_hint: {"center_x":0.5, "top":0.75}
-            padding: 0
+            size_hint: 0.9, None
+            height: 280
+            pos_hint: {"center_x": 0.5, "top": 0.75}
+            padding: [10, 10]
+            spacing: 5
+            
             canvas.before:
                 Color:
-                    rgba: 1,1,1,0.8
+                    rgba: 1, 1, 1, 0.8
                 RoundedRectangle:
                     pos: self.pos
                     size: self.size
                     radius: [25]
                 Color:
-                    rgba: 0.8, 0.7, 0.7, 0.6   # цвет рамки
+                    rgba: 0.8, 0.7, 0.7, 0.6
                 Line:
                     width: 1.0
-                    rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
+                    rounded_rectangle: (self.x, self.y, self.width, self.height, 25)
 
             Label:
                 text: "Время для сна"
                 font_name: "Gilroy-Medium"
                 font_size: "20sp"
-                color:  0.7137, 0.5294, 0.5294, 1
-                size_hint_y: .35
+                color: 0.7137, 0.5294, 0.5294, 1
+                size_hint_y: None
+                height: 40
 
-            # Time picker (сон)
-            BoxLayout:
-                size_hint_y: .65
-                spacing: dp(5)
+            ModernTimePicker:
+                id: sleep_time
+                hour: root.sleep_hour
+                minute: root.sleep_min
+                size_hint_y: None
+                height: 180
 
-                Spinner:
-                    background_color: (1, 1, 1, 0)  # прозрачный фон
-                    text: str(root.sleep_hour)
-                    values: [str(i) for i in range(0, 24)]
-                    font_size: "34sp"
-                    color: 0.7137, 0.5294, 0.5294, 1
-                    on_text: root.sleep_hour = int(self.text)
+            Label:
+                text: ""
+                size_hint_y: None
+                height: 20
 
-                Label:
-                    text: ":"
-                    font_size: "34sp"
-                    color: 0.55,0.38,0.38,1
-
-                Spinner:
-                    background_color: (1, 1, 1, 0)  # прозрачный фон
-                    text: f"{root.sleep_min:02d}"
-                    values: ["00","10","20","30","40","50"]
-                    font_size: "34sp"
-                    color: 0.7137, 0.5294, 0.5294, 1
-                    on_text: root.sleep_min = int(self.text)
-
-        # КАРТОЧКА – ПРОБУЖДЕНИЕ
+        # Карточка - Время пробуждения
         BoxLayout:
+            id: wake_card
             orientation: "vertical"
-            size_hint: .9, .24
-            pos_hint: {"center_x":0.5, "top":0.47}
-            padding: 0
+            size_hint: 0.9, None
+            height: 280
+            pos_hint: {"center_x": 0.5, "top": 0.48}
+            padding: [10, 10]
+            spacing: 5
+            
             canvas.before:
                 Color:
-                    rgba: 1,1,1,0.8
+                    rgba: 1, 1, 1, 0.8
                 RoundedRectangle:
                     pos: self.pos
                     size: self.size
                     radius: [25]
                 Color:
-                    rgba: 0.8, 0.7, 0.7, 0.6   # цвет рамки
+                    rgba: 0.8, 0.7, 0.7, 0.6
                 Line:
                     width: 1.0
-                    rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
+                    rounded_rectangle: (self.x, self.y, self.width, self.height, 25)
 
             Label:
                 text: "Время пробуждения"
                 font_name: "Gilroy-Medium"
                 font_size: "20sp"
-                color:  0.7137, 0.5294, 0.5294, 1
-                size_hint_y: .35
+                color: 0.7137, 0.5294, 0.5294, 1
+                size_hint_y: None
+                height: 40
 
-            BoxLayout:
-                size_hint_y: .65
-                spacing: dp(5)
+            ModernTimePicker:
+                id: wake_time
+                hour: root.wake_hour
+                minute: root.wake_min
+                size_hint_y: None
+                height: 180
 
-                Spinner:
-                    background_color: (1, 1, 1, 0)  # прозрачный фон
-                    text: str(root.wake_hour)
-                    values: [str(i) for i in range(0, 24)]
-                    font_size: "34sp"
-                    color: 0.7137, 0.5294, 0.5294, 1
-                    on_text: root.wake_hour = int(self.text)
+            Label:
+                text: ""
+                size_hint_y: None
+                height: 20
 
-                Label:
-                    text: ":"
-                    font_size: "34sp"
-                    color: 0.7137, 0.5294, 0.5294, 1
-
-                Spinner:
-                    background_color: (1, 1, 1, 0)  # прозрачный фон
-                    text: f"{root.wake_min:02d}"
-                    values: ["00","10","20","30","40","50"]
-                    font_size: "34sp"
-                    color: 0.7137, 0.5294, 0.5294, 1
-                    on_text: root.wake_min = int(self.text)
-            # Норма сна
+        # Норма сна
         Label:
-            text: "Примерная норма в день\\n8 часов"
+            text: "Примерная норма в день 8 часов"
             font_name: "Gilroy-Medium"
             font_size: "16sp"
-            color:  0.7137, 0.5294, 0.5294, 1
-            pos_hint: {"x": 0.1, "top": 0.67}
-            halign: "left"
+            color: 0.7137, 0.5294, 0.5294, 1
+            pos_hint: {"center_x": 0.5, "y": 0.08}
+            halign: "center"
             text_size: self.width, None
 
-        # Кнопка далее
-        Button:
-            text: ">"
-            font_size: "32sp"
-            background_normal: ""
-            background_color: 0,0,0,0
-            color: 0.7137, 0.5294, 0.5294, 1
-            size_hint: None,None
-            size: 70,70
+        # Кнопка перехода
+        BoxLayout:
+            size_hint: None, None
+            width: 70
+            height: 70
             pos_hint: {"right": 0.95, "y": 0.05}
-            on_release:
-                app.go_to_mood()
+            padding: [0, 0]
+            
             canvas.before:
                 Color:
                     rgba: 1, 1, 1, 1
                 RoundedRectangle:
                     pos: self.pos
                     size: self.size
-                    radius: [self.height] 
+                    radius: [35]
+
+            Button:
+                text: ">"
+                font_size: "32sp"
+                background_normal: ""
+                background_color: (0, 0, 0, 0)
+                color: 0.7137, 0.5294, 0.5294, 1
+                size: self.parent.size
+                pos: self.parent.pos
+                on_release: app.go_to_mood()
 
 <EmotionCarousel>:
     canvas.before:

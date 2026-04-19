@@ -24,8 +24,8 @@ LabelBase.register(name="Gilroy-RegularItalic", fn_regular="C:/Users/vbzai/OneDr
 LabelBase.register(name="Gilroy-Regular", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-Regular.otf")
 LabelBase.register(name="Gilroy-SemiBold", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-SemiBold.otf")
 
-store = JsonStore("user.json")
-daily_store = JsonStore("daily.json")
+store = JsonStore("user.json") # Для имени пользователя
+daily_store = JsonStore("daily.json")# Для ежедневных данных
 
 class PickerItem(Button):
     """Элемент для выбора времени"""
@@ -49,7 +49,6 @@ class TimePickerColumn(RecycleView):
     def __init__(self, values, **kwargs):
         super().__init__(**kwargs)
         self.values = values
-        self.size_hint_x = 0.25
         self.do_scroll_x = False
         self.do_scroll_y = True
         self.bar_width = 0
@@ -60,15 +59,15 @@ class TimePickerColumn(RecycleView):
         self.container = BoxLayout(
             orientation='vertical',
             size_hint_y=None,
-            spacing=5,
-            padding=[0, 10, 0, 10]
+            spacing=2,
+            padding=[0, 80, 0, 80]  # Увеличен padding для лучшего центрирования
         )
         
         # Создаем кнопки для каждого значения
         self.buttons = []
         for i, value in enumerate(values):
             btn = PickerItem(
-                text=str(value),
+                text=f"{value:02d}",
                 index=i
             )
             btn.bind(on_release=self._on_button_press)
@@ -76,7 +75,7 @@ class TimePickerColumn(RecycleView):
             self.buttons.append(btn)
         
         # Вычисляем высоту контейнера
-        self.container.height = len(values) * 65 + 20
+        self.container.height = len(values) * 62 + 160
         self.add_widget(self.container)
         
         # Центрируем выбранное значение
@@ -87,15 +86,23 @@ class TimePickerColumn(RecycleView):
         self.selected_value = self.values[btn.index]
         if self.on_selected:
             self.on_selected(self.selected_value)
+        # Прокручиваем к выбранной кнопке
         self._center_to_button(btn.index)
     
     def _center_to_button(self, index):
         """Центрирует скролл к выбранной кнопке"""
-        button_y = index * 65
-        target_y = button_y - self.height / 2 + 30
-        scroll_y = 1 - (target_y / (self.container.height - self.height))
+        if self.container.height <= self.height:
+            return
+        
+        # Простой расчет: позиция = индекс * высота элемента
+        item_height = 62  # 60 + 2 spacing
+        # Целевая позиция (чтобы кнопка оказалась в центре)
+        target = index * item_height + 80 - (self.height / 2) + 30
+        # Нормализуем
+        max_scroll = self.container.height - self.height
+        scroll_y = target / max_scroll
         scroll_y = max(0, min(1, scroll_y))
-        self.scroll_y = scroll_y
+        self.scroll_y = 1 - scroll_y
     
     def _center_selected(self, dt):
         """Центрирует скролл к выбранному значению"""
@@ -120,19 +127,18 @@ class ModernTimePicker(BoxLayout):
     minute = NumericProperty(0)
     
     def __init__(self, **kwargs):
-        kwargs.setdefault('spacing', 0)
-        kwargs.setdefault('padding', [5, 0])
+        kwargs.setdefault('spacing', -120)  # Умеренное отрицательное значение
+        kwargs.setdefault('padding', [0, 0])
         super().__init__(**kwargs)
         self.orientation = 'horizontal'
         self.size_hint_y = None
         self.height = 200
         
         # Часы (0-23)
-        self.hours_list = list(range(0, 24))
+        self.hours_list = list(range(00, 24))
         self.hours_picker = TimePickerColumn(self.hours_list)
         self.hours_picker.on_selected = self.on_hour_selected
         self.hours_picker.selected_value = self.hour
-        self.hours_picker.size_hint_x = 0.45  # Уменьшение ширины
         
         # Разделитель ":"
         separator = Label(
@@ -140,16 +146,19 @@ class ModernTimePicker(BoxLayout):
             font_size="42sp",
             color=(0.7137, 0.5294, 0.5294, 1),
             size_hint_x=None,
-            width=15,
+            width=0,
             font_name="Gilroy-Medium"
         )
         
         # Минуты (00, 10, 20, 30, 40, 50)
-        self.minutes_list = [0, 10, 20, 30, 40, 50]
+        self.minutes_list = [00, 10, 20, 30, 40, 50]
         self.minutes_picker = TimePickerColumn(self.minutes_list)
         self.minutes_picker.on_selected = self.on_minute_selected
         self.minutes_picker.selected_value = self.minute
-        self.minutes_picker.size_hint_x = 0.45  # Уменьшение ширины
+        
+        # Одинаковая ширина
+        self.hours_picker.size_hint_x = 0.5
+        self.minutes_picker.size_hint_x = 0.5
         
         self.add_widget(self.hours_picker)
         self.add_widget(separator)
@@ -327,8 +336,19 @@ class WaterScreen(Screen):
     def update_display(self):
         self.ids.water_label.text = f"{self.water_amount}/{self.max_water} ml"
 
+    # Сохраняем данные о воде
+        key = datetime.now().strftime("%Y-%m-%d")
+        data = daily_store.get(key) if daily_store.exists(key) else {}
+        data["water"] = self.water_amount
+        daily_store.put(key, **data)
+
 class StepsScreen(Screen):
     selected_steps = NumericProperty(0)
+
+    def go_next(self):
+        # если ввели вручную
+        if self.ids.steps_input.text.isdigit():
+            self.selected_steps = int(self.ids.steps_input.text)
 
     def choose_range(self, value):
         self.selected_steps = value
@@ -338,9 +358,16 @@ class StepsScreen(Screen):
         print("Шаги за сегодня:", self.selected_steps)
         # здесь переход дальше
 
-from kivy.uix.screenmanager import Screen
-from kivy.properties import NumericProperty
-from kivy.app import App
+        key = datetime.now().strftime("%Y-%m-%d")
+
+        data = daily_store.get(key) if daily_store.exists(key) else {}
+        data["steps"] = self.selected_steps
+
+        daily_store.put(key, **data)
+
+        print("Сохранены шаги:", self.selected_steps)
+
+        App.get_running_app().go_to_sleep()
 
 class SleepScreen(Screen):
     sleep_hour = NumericProperty(23)
@@ -371,8 +398,6 @@ class SleepScreen(Screen):
         app.go_to_mood()
 
 from kivy.uix.relativelayout import RelativeLayout
-from kivy.properties import NumericProperty, ListProperty, StringProperty
-from kivy.clock import Clock
 from kivy.uix.image import Image
 
 
@@ -418,147 +443,47 @@ class MoodScreen(Screen):
 class Share_2_Screen(Screen):
     pass
 
-# ----------------- ResultScreen (Python) -----------------
-from kivy.uix.screenmanager import Screen
-from kivy.properties import StringProperty, NumericProperty, ListProperty
-from datetime import datetime
-
-class ResultScreen(Screen):
-    # текстовые значения для отображения (в KV связываются через ids)
-    date_key = StringProperty("")   # YYYY-MM-DD
-    water_ml = NumericProperty(0)
-    steps = NumericProperty(0)
-    sleep_start = StringProperty("")   # "23:30"
-    sleep_end = StringProperty("")     # "07:10"
-    sleep_hours = NumericProperty(0.0)
-    mood = StringProperty("Не задано")
-    rec_texts = ListProperty([])       # список рекомендаций строками
-
-    # пороги (можешь менять)
-    WATER_GOAL = 2000     # мл
-    STEPS_GOAL = 5000     # шагов
-    SLEEP_GOAL_MIN = 7.0  # часов минимальная рекомендованная
-    SLEEP_GOAL_MAX = 9.0  # часов желаемая
+class ResultWaterScreen(Screen):
+    water = NumericProperty(0)
+    goal = 1000
 
     def on_pre_enter(self):
-        # при заходе, если дата не передана — возьмём сегодня
-        if not self.date_key:
-            self.update_from_store(None)
-
-    def update_from_store(self, date_key=None):
-        """
-        Загружает данные из daily_store по ключу 'YYYY-MM-DD'.
-        Если date_key is None — берёт сегодня.
-        Затем вычисляет рекомендации.
-        """
-        if date_key is None:
-            date = datetime.now()
+        today = datetime.now().strftime("%Y-%m-%d")
+        if daily_store.exists(today):
+            self.water = daily_store.get(today).get("water", 0)
+            print(f"Загружена вода: {self.water}")  # Для отладки
         else:
-            # ожидается строка 'YYYY-MM-DD' или datetime
-            if isinstance(date_key, str):
-                try:
-                    date = datetime.strptime(date_key, "%Y-%m-%d")
-                except Exception:
-                    date = datetime.now()
-            else:
-                date = date_key
+            self.water = 0
 
-        key = date.strftime("%Y-%m-%d")
-        self.date_key = key
+class ResultStepsScreen(Screen):
+    steps = NumericProperty(0)
+    goal = 7000
 
-        # defaults
-        self.water_ml = 0
-        self.steps = 0
-        self.sleep_start = ""
-        self.sleep_end = ""
-        self.sleep_hours = 0.0
-        self.mood = "Не задано"
+    def on_pre_enter(self):
+        today = datetime.now().strftime("%Y-%m-%d")
+        if daily_store.exists(today):
+            self.steps = daily_store.get(today).get("steps", 0)
 
-        if daily_store.exists(key):
-            d = daily_store.get(key)
-            # ожидаем ключи 'water', 'steps', 'sleep_start', 'sleep_end', 'mood'
-            self.water_ml = d.get("water", 0)
-            self.steps = d.get("steps", 0)
-            self.sleep_start = d.get("sleep_start", "")   # "23:30"
-            self.sleep_end = d.get("sleep_end", "")       # "07:10"
-            if self.sleep_start and self.sleep_end:
-                self.sleep_hours = self._calc_sleep_hours(self.sleep_start, self.sleep_end)
-            else:
-                self.sleep_hours = d.get("sleep_hours", 0.0)
-            self.mood = d.get("mood", self.mood)
+class ResultSleepScreen(Screen):
+    sleep_hours = NumericProperty(0)
 
-        # сформируем рекомендации
-        self.rec_texts = self._generate_recommendations()
+    def on_pre_enter(self):
+        today = datetime.now().strftime("%Y-%m-%d")
+        if daily_store.exists(today):
+            start = daily_store.get(today).get("sleep_start", "")
+            end = daily_store.get(today).get("sleep_end", "")
 
-    def _calc_sleep_hours(self, start_str, end_str):
-        """Подсчитать длительность сна по строкам 'HH:MM' -> часы (float)."""
-        try:
-            t0 = datetime.strptime(start_str, "%H:%M")
-            t1 = datetime.strptime(end_str, "%H:%M")
-            # если заснул до полуночи и проснулся после — учтём перенос через день
-            delta = t1 - t0
-            if delta.total_seconds() <= 0:
-                delta = (t1.replace(day=t1.day+1) if t1.day==t0.day else t1) - t0
-                # проще: добавить 24 часа
-                delta = delta.total_seconds()
-                hours = delta / 3600.0
-            else:
-                hours = delta.total_seconds() / 3600.0
-            # корректнее: проще вычислить с учётом дат:
-            start_dt = datetime(2000,1,1, t0.hour, t0.minute)
-            end_dt = datetime(2000,1,1, t1.hour, t1.minute)
-            if end_dt <= start_dt:
-                end_dt = end_dt.replace(day=2)
-            hours = (end_dt - start_dt).total_seconds() / 3600.0
-            return round(hours, 2)
-        except Exception:
-            return 0.0
+            if start and end:
+                self.sleep_hours = self.calc_sleep(start, end)
 
-    def _generate_recommendations(self):
-        """Возвращает список из 4 рекомендательных строк в том же порядке: вода, шаги, сон, настроение"""
-        recs = []
-        # 1) вода
-        if self.water_ml >= self.WATER_GOAL:
-            recs.append("Отлично — с водой всё в порядке. Поддерживайте такой режим.")
-        elif self.water_ml >= self.WATER_GOAL * 0.6:
-            recs.append("Вы выпили немного воды. Попробуйте добавить ещё 1 стакан в течение часа.")
-        else:
-            recs.append("Нужно больше воды — выпейте 250–300 мл прямо сейчас и затем ещё стакан через час.")
+    def calc_sleep(self, start, end):
+        t1 = datetime.strptime(start, "%H:%M")
+        t2 = datetime.strptime(end, "%H:%M")
 
-        # 2) шаги
-        if self.steps >= self.STEPS_GOAL:
-            recs.append("Хорошо — вы активны сегодня. Продолжайте в том же духе!")
-        elif self.steps >= self.STEPS_GOAL * 0.5:
-            recs.append("Неплохо, но можно добавить короткую 10–15 минутную прогулку вечером.")
-        else:
-            recs.append("Мало движения — выйдите на лёгкую прогулку 15–20 минут, чтобы разогнать кровь.")
+        if t2 <= t1:
+            t2 = t2.replace(day=t2.day + 1)
 
-        # 3) сон
-        if self.sleep_hours >= self.SLEEP_GOAL_MIN and self.sleep_hours <= self.SLEEP_GOAL_MAX:
-            recs.append(f"Сон {self.sleep_hours} ч — в пределах нормы. Отлично!")
-        elif self.sleep_hours >= self.SLEEP_GOAL_MAX:
-            recs.append(f"Сон {self.sleep_hours} ч — возможно вы спали слишком много, попробуйте стабилизировать режим.")
-        elif 0 < self.sleep_hours < self.SLEEP_GOAL_MIN:
-            diff = round(self.SLEEP_GOAL_MIN - self.sleep_hours, 1)
-            recs.append(f"Сон {self.sleep_hours} ч — рекомендуется лечь на {diff} ч раньше, чтобы восстановиться.")
-        else:
-            recs.append("Нет данных о сне — укажите время сна в опросе для персональных рекомендаций.")
-
-        # 4) настроение
-        negative = {"Ярость", "Раздражение", "Грусть", "Смущение"}
-        neutral = {"Безразличие"}
-        positive = {"Счастье", "Спокойствие"}
-
-        if self.mood in positive:
-            recs.append("Настроение позитивное — используйте энергию для полезных дел или отдыха.")
-        elif self.mood in neutral:
-            recs.append("Нейтральное состояние — сделайте небольшую активность или медитацию, чтобы улучшить тонус.")
-        elif self.mood in negative:
-            recs.append("Настроение отрицательное — постарайтесь сделать дыхательное упражнение 5 минут или короткую прогулку.")
-        else:
-            recs.append("Нет данных о настроении — пройдите опрос, чтобы получить рекомендации.")
-
-        return recs
+        return round((t2 - t1).seconds / 3600, 1)
 
     # Вспомогательный метод: можно вызвать из App чтобы открыть экран результатов
     def open_for_date(self, date_key=None):
@@ -1488,7 +1413,7 @@ kv_string = '''
                 size: 70,70
                 pos_hint: {"right": 0.95, "y": 0.05}
                 on_release:
-                    app.go_to_sleep()
+                    root.go_next()
                 canvas.before:
                     Color:
                         rgba: 1, 1, 1, 1
@@ -1496,8 +1421,6 @@ kv_string = '''
                         pos: self.pos
                         size: self.size
                         radius: [self.height] 
-
-        
 
 <RangeButton>:
     background_normal: ""
@@ -1512,11 +1435,13 @@ kv_string = '''
 <ModernTimePicker>:
     size_hint_y: None
     height: 200
+    spacing: -120
+    padding: [0, 0]
 
 <PickerItem>:
     size_hint_y: None
     height: 60
-    font_size: '34sp'
+    font_size: '38sp'
     font_name: 'Gilroy-Medium'
     color: (0.7137, 0.5294, 0.5294, 1)
     background_normal: ''
@@ -1543,7 +1468,7 @@ kv_string = '''
             font_name: "Gilroy-Medium"
             font_size: "36sp"
             color: 0.7137, 0.5294, 0.5294, 1
-            pos_hint: {"x": 0.07, "y": 0.41}
+            pos_hint: {"x": -0.35, "y": 0.41}
 
         # Кнопка назад "<"
         Button:
@@ -1653,15 +1578,16 @@ kv_string = '''
                 size_hint_y: None
                 height: 20
 
-        # Норма сна
+        #Норма сна
         Label:
-            text: "Примерная норма в день 8 часов"
+            text: "Примерная норма в день\\n8 часов"
             font_name: "Gilroy-Medium"
             font_size: "16sp"
             color: 0.7137, 0.5294, 0.5294, 1
-            pos_hint: {"center_x": 0.5, "y": 0.08}
-            halign: "center"
-            text_size: self.width, None
+            pos_hint: {"x": 0.09, "y": -0.35}  # Сдвинул влево (было 0.41)
+            halign: "left"  # Текст по левому краю
+            valign: "top"   # Выравнивание по вертикали
+            text_size: self.width, None  # Ширина для переноса
 
         # Кнопка перехода
         BoxLayout:
@@ -1844,7 +1770,7 @@ kv_string = '''
             background_color: 0,0,0,0
             color:  0.7137, 0.5294, 0.5294, 1
             on_release:
-                app.go_to_water()
+                app.go_to_result_water()
             canvas.before:
                 Color:
                     rgba: 1, 1, 1, 1
@@ -1871,321 +1797,180 @@ kv_string = '''
             on_release:
                 app.go_to_water()
 
-<ResultScreen>:
-    name: "results"
+#---------------- Блок рекомендаций ----------------
+<ResultWaterScreen>:
+    name: "result_water"
 
     FloatLayout:
-        # фон (вставь путь к вашему фону или оставь однотонный)
-        Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон (1).png"
-            allow_stretch: True
-            keep_ratio: False
-            size: self.parent.size
-            pos: self.parent.pos
+        canvas.before:
+            Rectangle:
+                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+                size: self.size
+                pos: self.pos
 
-        # Заголовок
         Label:
             text: "Результаты"
-            font_name: "Gilroy-SemiBold"
-            font_size: "34sp"
-            color: 0.55,0.38,0.38,1
-            pos_hint: {"center_x":0.5, "top":0.95}
+            font_size: "32sp"
+            pos_hint: {"x": -0.3, "y": 0.4}
+            color: 0.7,0.5,0.5,1
 
-        # Подзаголовок / дата
         Label:
-            id: results_date
-            text: root.date_key
-            font_name: "Gilroy-Medium"
-            font_size: "16sp"
-            color: 0.55,0.38,0.38,1
-            pos_hint: {"center_x":0.5, "top":0.90}
+            text: "01.11 пн"
+            pos_hint: {"x": -0.4, "y": 0.35}
+            color: 0.7,0.5,0.5,1
 
-        # ------------- Карточки (в одну колонку, как в дизайне) -------------
-        GridLayout:
-            cols: 1
-            size_hint: 0.94, None
-            height: dp(420)
-            pos_hint: {"center_x":0.5, "center_y":0.6}
-            row_default_height: dp(100)
-            row_force_default: True
-            spacing: dp(12)
+        # СТАКАН
+        FloatLayout:
+            size_hint: .5, .5
+            pos_hint: {"center_x":0.5, "center_y":0.55}
 
-            # Карточка Воды
-            BoxLayout:
-                orientation: "horizontal"
-                padding: dp(14)
-                spacing: dp(12)
-                canvas.before:
-                    Color:
-                        rgba: 1, 0.9647, 0.9333, 1
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [18]
-                    Color:
-                        rgba: 0.85,0.75,0.72,1
-                    Line:
-                        width: 1.2
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 18)
+            Image:
+                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/стакан.png"
+                pos_hint: {"center_x": 0.5, "center_y": 0.5}
+                size_hint: 1,1
 
-                Image:
-                    source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/вода.png"
-                    size_hint_x: None
-                    width: dp(60)
+            Label:
+                text: f"{root.water}/1000 ml"
+                pos_hint: {"center_x":0.5, "center_y":0.7}
+                color: 0.7,0.5,0.5,1
 
-                BoxLayout:
-                    orientation: "vertical"
-                    Label:
-                        text: "Водный баланс"
-                        font_name: "Gilroy-Medium"
-                        font_size: "16sp"
-                        color: 0.45,0.32,0.32,1
-                        halign: "left"
-                        text_size: self.width, None
-                    Label:
-                        id: water_val
-                        text: f"{int(root.water_ml)} мл"
-                        font_name: "Gilroy-SemiBold"
-                        font_size: "20sp"
-                        color: 0.45,0.32,0.32,1
-                        halign: "left"
-                        text_size: self.width, None
+        # ТЕКСТ
+        # Label:
+        #     text:
+        #         "Вы прекрасно справились с водным балансом!"
+        #         if root.water >= root.goal else
+        #         "Вам стоит пить больше воды"
+        #     size_hint: .8, .2
+        #     pos_hint: {"center_x":0.5, "y":0.25}
+        #     halign: "center"
+        #     text_size: self.size
+        #     color: 0.7,0.5,0.5,1
 
-            # Карточка Шагов
-            BoxLayout:
-                orientation: "horizontal"
-                padding: dp(14)
-                spacing: dp(12)
-                canvas.before:
-                    Color:
-                        rgba: 1, 0.9647, 0.9333, 1
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [18]
-                    Color:
-                        rgba: 0.85,0.75,0.72,1
-                    Line:
-                        width: 1.2
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 18)
-
-                Image:
-                    source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/шаги.png"
-                    size_hint_x: None
-                    width: dp(60)
-
-                BoxLayout:
-                    orientation: "vertical"
-                    Label:
-                        text: "Активность"
-                        font_name: "Gilroy-Medium"
-                        font_size: "16sp"
-                        color: 0.45,0.32,0.32,1
-                        halign: "left"
-                        text_size: self.width, None
-                    Label:
-                        id: steps_val
-                        text: f"{int(root.steps)} шагов"
-                        font_name: "Gilroy-SemiBold"
-                        font_size: "20sp"
-                        color: 0.45,0.32,0.32,1
-                        halign: "left"
-                        text_size: self.width, None
-
-            # Карточка Сна
-            BoxLayout:
-                orientation: "horizontal"
-                padding: dp(14)
-                spacing: dp(12)
-                canvas.before:
-                    Color:
-                        rgba: 1, 0.9647, 0.9333, 1
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [18]
-                    Color:
-                        rgba: 0.85,0.75,0.72,1
-                    Line:
-                        width: 1.2
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 18)
-
-                Image:
-                    source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/сон.png"
-                    size_hint_x: None
-                    width: dp(60)
-
-                BoxLayout:
-                    orientation: "vertical"
-                    Label:
-                        text: "Сон"
-                        font_name: "Gilroy-Medium"
-                        font_size: "16sp"
-                        color: 0.45,0.32,0.32,1
-                        halign: "left"
-                        text_size: self.width, None
-                    Label:
-                        id: sleep_val
-                        text: (root.sleep_start + " — " + root.sleep_end) if root.sleep_start and root.sleep_end else f"{root.sleep_hours} ч"
-                        font_name: "Gilroy-SemiBold"
-                        font_size: "20sp"
-                        color: 0.45,0.32,0.32,1
-                        halign: "left"
-                        text_size: self.width, None
-
-            # Карточка Настроения
-            BoxLayout:
-                orientation: "horizontal"
-                padding: dp(14)
-                spacing: dp(12)
-                canvas.before:
-                    Color:
-                        rgba: 1, 0.9647, 0.9333, 1
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [18]
-                    Color:
-                        rgba: 0.85,0.75,0.72,1
-                    Line:
-                        width: 1.2
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 18)
-
-                # вместо Image можно поставить картинку эмоции, если храните путь
-                Image:
-                    source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/mood_placeholder.png"
-                    size_hint_x: None
-                    width: dp(60)
-
-                BoxLayout:
-                    orientation: "vertical"
-                    Label:
-                        text: "Настроение"
-                        font_name: "Gilroy-Medium"
-                        font_size: "16sp"
-                        color: 0.45,0.32,0.32,1
-                        halign: "left"
-                        text_size: self.width, None
-                    Label:
-                        id: mood_val
-                        text: root.mood
-                        font_name: "Gilroy-SemiBold"
-                        font_size: "20sp"
-                        color: 0.45,0.32,0.32,1
-                        halign: "left"
-                        text_size: self.width, None
-
-        # ---------------- Блок рекомендаций ----------------
-        BoxLayout:
-            orientation: "vertical"
-            size_hint: 0.94, None
-            height: dp(200)
-            pos_hint: {"center_x":0.5, "center_y":0.25}
-            padding: dp(12)
-            spacing: dp(8)
+        # КАРТОЧКА
+        Label:
+            text: "Начните утро со стакана воды"
+            size_hint: .8, .15
+            pos_hint: {"center_x":0.5, "y":0.1}
             canvas.before:
                 Color:
-                    rgba: 1,1,1,1
+                    rgba: 1,1,1,0.8
                 RoundedRectangle:
                     pos: self.pos
                     size: self.size
-                    radius: [16]
+                    radius: [20]
+
+        Button:
+            text: ">"
+            pos_hint: {"right":0.95, "y":0.05}
+            size_hint: None,None
+            size: 60,60
+            on_release: app.root.current = "result_steps"
+
+<ResultStepsScreen>:
+    name: "result_steps"
+
+    FloatLayout:
+        canvas.before:
+            Rectangle:
+                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+                size: self.size
+                pos: self.pos
+
+        Label:
+            text: "Результаты"
+            font_size: "32sp"
+            pos_hint: {"x": -0.3, "y": 0.4}
+            color: 0.7,0.5,0.5,1
+
+        # КРУГ
+        Widget:
+            size_hint: None, None
+            size: 220, 220
+            pos_hint: {"center_x":0.5, "center_y":0.6}
+
+            canvas:
+                # серый фон круга
                 Color:
-                    rgba: 0.9,0.85,0.82,1
+                    rgba: 0.9, 0.85, 0.8, 1
                 Line:
-                    width: 1
-                    rounded_rectangle: (self.x, self.y, self.width, self.height, 16)
+                    width: 10
+                    circle: (self.center_x, self.center_y, 100, 0, 360)
 
-            Label:
-                text: "Рекомендации"
-                font_name: "Gilroy-Medium"
-                font_size: "18sp"
-                color: 0.45,0.32,0.32,1
-                size_hint_y: None
-                height: dp(26)
+                # ПРОГРЕСС
+                Color:
+                    rgba: 1, 0.7, 0.4, 1
+                Line:
+                    width: 10
+                    circle: (self.center_x, self.center_y, 100, 0, root.steps / 7000 * 360)
 
-            # список рекомендаций
-            GridLayout:
-                cols: 1
-                size_hint_y: None
-                height: self.minimum_height
-                row_default_height: dp(36)
-                row_force_default: True
-                padding: [6,0,6,0]
+        Label:
+            text: f"{root.steps}"
+            pos_hint: {"center_x":0.5, "center_y":0.6}
+            font_size: "32sp"
+            color: 0.7,0.5,0.5,1
 
-                Label:
-                    text: root.rec_texts[0] if root.rec_texts and len(root.rec_texts) > 0 else ""
-                    font_name: "Gilroy-Regular"
-                    font_size: "14sp"
-                    color: 0.45,0.32,0.32,1
-                    halign: "left"
-                    text_size: self.width, None
+        Label:
+            text: "шагов"
+            pos_hint: {"center_x":0.5, "center_y":0.55}
+            color: 0.7,0.5,0.5,1
 
-                Label:
-                    text: root.rec_texts[1] if root.rec_texts and len(root.rec_texts) > 1 else ""
-                    font_name: "Gilroy-Regular"
-                    font_size: "14sp"
-                    color: 0.45,0.32,0.32,1
-                    halign: "left"
-                    text_size: self.width, None
+        # Label:
+        #     text:
+        #         "Отличная активность!"
+        #         if root.steps >= root.goal else
+        #         "Попробуйте больше двигаться"
+        #     size_hint: .8, .2
+        #     pos_hint: {"center_x":0.5, "y":0.25}
+        #     halign: "center"
+        #     text_size: self.size
+        #     color: 0.7,0.5,0.5,1
 
-                Label:
-                    text: root.rec_texts[2] if root.rec_texts and len(root.rec_texts) > 2 else ""
-                    font_name: "Gilroy-Regular"
-                    font_size: "14sp"
-                    color: 0.45,0.32,0.32,1
-                    halign: "left"
-                    text_size: self.width, None
+        Button:
+            text: ">"
+            pos_hint: {"right":0.95, "y":0.05}
+            size_hint: None,None
+            size: 60,60
+            on_release: app.root.current = "result_sleep"
 
-                Label:
-                    text: root.rec_texts[3] if root.rec_texts and len(root.rec_texts) > 3 else ""
-                    font_name: "Gilroy-Regular"
-                    font_size: "14sp"
-                    color: 0.45,0.32,0.32,1
-                    halign: "left"
-                    text_size: self.width, None
+<ResultSleepScreen>:
+    name: "result_sleep"
 
-        # Кнопки внизу
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 0.9, None
-            height: dp(64)
-            pos_hint: {"center_x":0.5, "y":0.03}
-            spacing: dp(12)
+    FloatLayout:
+        canvas.before:
+            Rectangle:
+                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+                size: self.size
+                pos: self.pos
 
-            Button:
-                text: "На главную"
-                size_hint: .7, 1
-                background_normal: ""
-                background_down: ""
-                background_color: 1,1,1,1
-                color: 0.55,0.38,0.38,1
-                canvas.before:
-                    Color:
-                        rgba: 1,1,1,1
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [self.height/2]
-                on_release:
-                    app.go_to_home()
+        Label:
+            text: "Результаты"
+            font_size: "32sp"
+            pos_hint: {"x": -0.3, "y": 0.4}
+            color: 0.7,0.5,0.5,1
 
-            Button:
-                text: "Поделиться"
-                size_hint: .3, 1
-                background_normal: ""
-                background_down: ""
-                background_color: 0.55,0.38,0.38,1
-                color: 1,1,1,1
-                canvas.before:
-                    Color:
-                        rgba: 0.55,0.38,0.38,1
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [self.height/2]
-                on_release:
-                    print("Поделиться: ", root.date_key, root.water_ml, root.steps, root.sleep_hours, root.mood)
+        Label:
+            text: f"{root.sleep_hours} часов"
+            font_size: "40sp"
+            pos_hint: {"center_x":0.5, "center_y":0.6}
+            color: 0.7,0.5,0.5,1
+
+        # Label:
+        #     text:
+        #         "Отличный сон!"
+        #         if root.sleep_hours >= 7 else
+        #         "Недостаток сна влияет на здоровье"
+        #     size_hint: .8, .2
+        #     pos_hint: {"center_x":0.5, "y":0.25}
+        #     halign: "center"
+        #     text_size: self.size
+        #     color: 0.7,0.5,0.5,1
+
+        Button:
+            text: ">"
+            pos_hint: {"right":0.95, "y":0.05}
+            size_hint: None,None
+            size: 60,60
+            on_release: app.root.current = "main"
 '''
 
 class MainApp(App):
@@ -2203,7 +1988,10 @@ class MainApp(App):
         sm.add_widget(SleepScreen(name="sleep"))
         sm.add_widget(MoodScreen(name="mood"))
         sm.add_widget(Share_2_Screen(name="share_2"))
-        sm.add_widget(ResultScreen(name="results"))
+        sm.add_widget(ResultWaterScreen(name="result_water"))
+        sm.add_widget(ResultStepsScreen(name="result_steps"))
+        sm.add_widget(ResultSleepScreen(name="result_sleep"))
+
         return sm
     
     def save_name(self, name):
@@ -2260,14 +2048,12 @@ class MainApp(App):
         self.root.current = "mood"
     def go_to_share_2(self):
         self.root.current = "share_2"
-
-        App.get_running_app().go_to_results()
-
-    def go_to_results(self, date_key=None):
-        scr = self.root.get_screen("results")
-        scr.update_from_store(date_key)
-        self.root.current = "results"
-
+    def go_to_result_water(self):
+        self.root.current = "result_water"
+    def go_to_result_steps(self):
+        self.root.current = "result_steps"
+    def go_to_result_sleep(self):
+        self.root.current = "result_sleep"
 
 if __name__ == '__main__':
     MainApp().run()

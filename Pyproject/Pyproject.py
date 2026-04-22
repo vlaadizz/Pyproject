@@ -17,6 +17,7 @@ from kivy.uix.recycleview.views import RecycleDataViewBehavior
 
 Window.size = (390, 844)
 
+
 #Регистрация шрифтов
 LabelBase.register(name="Gilroy-MediumItalic", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-MediumItalic.otf")
 LabelBase.register(name="Gilroy-Medium", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-Medium.otf")
@@ -300,7 +301,7 @@ class HomeScreen(Screen):
                 selected_date = monday + timedelta(days=index)
                 break
 
-        key = selected_date.strftime("%Y-%m-%d")
+        key = App.get_running_app().selected_date
 
         if daily_store.exists(key):
             data = daily_store.get(key)
@@ -337,7 +338,7 @@ class WaterScreen(Screen):
         self.ids.water_label.text = f"{self.water_amount}/{self.max_water} ml"
 
     # Сохраняем данные о воде
-        key = datetime.now().strftime("%Y-%m-%d")
+        key = App.get_running_app().selected_date
         data = daily_store.get(key) if daily_store.exists(key) else {}
         data["water"] = self.water_amount
         daily_store.put(key, **data)
@@ -358,7 +359,7 @@ class StepsScreen(Screen):
         print("Шаги за сегодня:", self.selected_steps)
         # здесь переход дальше
 
-        key = datetime.now().strftime("%Y-%m-%d")
+        key = App.get_running_app().selected_date
 
         data = daily_store.get(key) if daily_store.exists(key) else {}
         data["steps"] = self.selected_steps
@@ -397,6 +398,8 @@ class SleepScreen(Screen):
         app = App.get_running_app()
         app.go_to_mood()
 
+        key = App.get_running_app().selected_date
+
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.image import Image
 
@@ -417,9 +420,9 @@ class EmotionCarousel(RelativeLayout):
     emotion_name = StringProperty("")
     emotion_image = StringProperty("")
 
-    def _init_(self, **kwargs):
-        super()._init_(**kwargs)
-        self.init_emotion()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.update_emotion()
 
     def init_emotion(self, *args):
         self.update_emotion()
@@ -436,6 +439,19 @@ class EmotionCarousel(RelativeLayout):
         name, img = self.emotions[self.index]
         self.emotion_name = name
         self.emotion_image = img
+
+    def save_emotion(self):
+        name, img = self.emotions[self.index]
+
+        key = App.get_running_app().selected_date
+
+        data = daily_store.get(key) if daily_store.exists(key) else {}
+        data["mood"] = name
+        data["mood_image"] = img   # ← сохраняем картинку тоже!
+
+        daily_store.put(key, **data)
+
+        print("Сохранено настроение:", name)
         
 class MoodScreen(Screen):
     pass
@@ -491,6 +507,45 @@ class ResultSleepScreen(Screen):
         self.update_from_store(date_key)
         self.manager.current = self.name
 
+
+class ResultMoodScreen(Screen):
+    mood = StringProperty("")
+    mood_image = StringProperty("")
+    mood_text = StringProperty("")
+
+    def on_pre_enter(self):
+        key = datetime.now().strftime("%Y-%m-%d")
+
+        if daily_store.exists(key):
+            data = daily_store.get(key)
+
+            self.mood = data.get("mood", "Не задано")
+            self.mood_image = data.get("mood_image", "")
+
+        else:
+            self.mood = "Не задано"
+            self.mood_image = ""
+
+        self.generate_text()
+
+    def generate_text(self):
+        if self.mood in ["Ярость", "Раздражение"]:
+            self.mood_text = "Похоже, вы испытываете напряжение. Попробуйте отдохнуть и снизить нагрузку."
+    
+        elif self.mood in ["Грусть", "Безразличие"]:
+            self.mood_text = "Сегодня стоит уделить внимание себе — прогулка или разговор могут помочь."
+
+        elif self.mood in ["Смущение"]:
+            self.mood_text = "Небольшая неуверенность — это нормально. Дайте себе время."
+
+        elif self.mood in ["Спокойствие"]:
+            self.mood_text = "Вы в стабильном состоянии. Отличный момент для продуктивного дня."
+
+        elif self.mood in ["Счастье"]:
+            self.mood_text = "Вы в хорошем эмоциональном состоянии. Так держать ❤️"
+
+        else:
+            self.mood_text = "Настроение не определено"
 
 # KV код как строка
 kv_string = '''
@@ -1616,6 +1671,7 @@ kv_string = '''
                 on_release: app.go_to_mood()
 
 <EmotionCarousel>:
+    id: carousel
     canvas.before:
         Color:
             rgba: 1,1,1,0
@@ -1665,14 +1721,14 @@ kv_string = '''
             # Картинка эмоции
             Image:
                 id: emoji_img
-                source: root.ids.carousel.emotion_image
+                source: carousel.emotion_image
                 size_hint: None, None
                 size: 200, 200
                 pos_hint: {"center_x":0.5, "center_y":0.6}
 
             # Название эмоции
             Label:
-                text: root.ids.carousel.emotion_name
+                text: carousel.emotion_name
                 font_name: "Gilroy-SemiBold"
                 font_size: "26sp"
                 color: 0.7137, 0.5294, 0.5294, 1
@@ -1700,16 +1756,22 @@ kv_string = '''
                 color: 0.7137, 0.5294, 0.5294, 1
                 on_release: root.ids.carousel.next_emotion()
 
-        Button:
-            text: "Подобрать"
-            size_hint: 0.7,0.1
-            pos_hint: {"center_x":0.5, "center_y":0.12}
-            font_name: "Gilroy-SemiBold"
-            background_normal: ""
-            background_color: 1,1,1,1
-            color: 0.7,0.5,0.5,1
-            on_release:
-                print("Выбрано:", root.ids.carousel.emotion_name)
+            Button:
+                text: "Подобрать"
+                size_hint: 0.6, 0.1
+                pos_hint: {"center_x":0.5, "center_y":0.2}
+
+                on_release:
+                    carousel.save_emotion()
+                    app.go_to_share_2()
+
+                canvas.before:
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [self.height/2]
         
         # Кнопка далее
         Button:
@@ -1970,10 +2032,82 @@ kv_string = '''
             pos_hint: {"right":0.95, "y":0.05}
             size_hint: None,None
             size: 60,60
-            on_release: app.root.current = "main"
+            on_release: app.root.current = "result_mood"
+
+
+<ResultMoodScreen>:
+    name: "result_mood"
+
+    FloatLayout:
+        canvas.before:
+            Rectangle:
+                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+                size: self.size
+                pos: self.pos
+
+        Label:
+            text: "Результаты"
+            font_size: "32sp"
+            color: 0.7,0.5,0.5,1
+            pos_hint: {"x": -0.3, "y": 0.42}
+
+        Image:
+            source: root.mood_image
+            size_hint: None, None
+            size: 200, 200
+            pos_hint: {"center_x": 0.5, "center_y": 0.6}
+
+        # КАРТОЧКА
+        BoxLayout:
+            orientation: "vertical"
+            size_hint: .85, .4
+            pos_hint: {"center_x":0.5, "center_y":0.55}
+
+            canvas.before:
+                Color:
+                    rgba: 1,1,1,0.8
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [25]
+
+            Label:
+                text: root.mood
+                font_size: "22sp"
+                size_hint_y: .3
+                color: 0.7,0.5,0.5,1
+
+            Label:
+                text:root.mood_text
+                font_size: "16sp"
+                halign: "center"
+                text_size: self.width-40, None
+                color: 0.7,0.5,0.5,1
+
+        # КНОПКА ВПЕРЕД
+        Button:
+            text: ">"
+            size_hint: None,None
+            size: 70,70
+            pos_hint: {"right":0.95, "y":0.05}
+            background_normal: ""
+            background_color: 0,0,0,0
+            color: 0.7,0.5,0.5,1
+
+            on_release:
+                app.root.current = "final_result"
+
+            canvas.before:
+                Color:
+                    rgba: 1,1,1,1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [self.height]
 '''
 
 class MainApp(App):
+    selected_date = StringProperty(datetime.now().strftime("%Y-%m-%d"))
     def build(self):
         # Загружаем KV строку вместо файла
         Builder.load_string(kv_string)
@@ -1991,7 +2125,7 @@ class MainApp(App):
         sm.add_widget(ResultWaterScreen(name="result_water"))
         sm.add_widget(ResultStepsScreen(name="result_steps"))
         sm.add_widget(ResultSleepScreen(name="result_sleep"))
-
+        sm.add_widget(ResultMoodScreen(name="result_mood"))
         return sm
     
     def save_name(self, name):
@@ -2032,7 +2166,8 @@ class MainApp(App):
         if self.ids.steps_input.text.isdigit():
             self.selected_steps = int(self.ids.steps_input.text)
 
-        key = datetime.now().strftime("%Y-%m-%d")
+        #key = datetime.now().strftime("%Y-%m-%d")
+        key = App.get_running_app().selected_date
 
         data = daily_store.get(key) if daily_store.exists(key) else {}
         data["steps"] = self.selected_steps
@@ -2054,6 +2189,8 @@ class MainApp(App):
         self.root.current = "result_steps"
     def go_to_result_sleep(self):
         self.root.current = "result_sleep"
+    def go_to_result_mood(self):
+        self.root.current = "result_mood"
 
 if __name__ == '__main__':
     MainApp().run()

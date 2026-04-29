@@ -126,6 +126,10 @@ class ModernTimePicker(BoxLayout):
     """Современный TimePicker с прокруткой"""
     hour = NumericProperty(23)
     minute = NumericProperty(0)
+
+    # Добавьте эти свойства для привязки к SleepScreen
+    sleep_hour = NumericProperty(23)
+    sleep_min = NumericProperty(0)
     
     def __init__(self, **kwargs):
         kwargs.setdefault('spacing', -120)  # Умеренное отрицательное значение
@@ -170,11 +174,22 @@ class ModernTimePicker(BoxLayout):
     
     def on_hour_selected(self, value):
         self.hour = value
+        self.parent_hour = value  # Обновляем родительское свойство
         print(f"Час выбран: {value}")
     
     def on_minute_selected(self, value):
         self.minute = value
+        self.parent_minute = value  # Обновляем родительское свойство
         print(f"Минута выбрана: {value}")
+
+    def _auto_save(self):
+    # Автоматически сохраняем при изменении времени
+        app = App.get_running_app()
+        if app.root.current == "sleep":
+            sleep_screen = app.root.get_screen("sleep")
+            sleep_screen.sleep_hour = self.hour
+            sleep_screen.sleep_min = self.minute
+            # Здесь можно сразу сохранять
     
     def _set_initial_values(self, dt):
         """Устанавливает начальные значения"""
@@ -377,6 +392,28 @@ class SleepScreen(Screen):
     wake_min = NumericProperty(0)
 
     def on_enter(self):
+        # Загружаем сохраненные значения для текущей даты
+        app = App.get_running_app()
+        key = app.selected_date
+
+        self.ids.sleep_time.bind(hour=self.on_sleep_time_changed)
+        self.ids.sleep_time.bind(minute=self.on_sleep_time_changed)
+
+        self.ids.wake_time.bind(hour=self.on_wake_time_changed)
+        self.ids.wake_time.bind(minute=self.on_wake_time_changed)
+        
+        if daily_store.exists(key):
+            data = daily_store.get(key)
+            # Загружаем сохраненное время сна, если есть
+            if "sleep_start" in data:
+                start = data["sleep_start"]
+                self.sleep_hour = int(start.split(":")[0])
+                self.sleep_min = int(start.split(":")[1])
+            if "sleep_end" in data:
+                end = data["sleep_end"]
+                self.wake_hour = int(end.split(":")[0])
+                self.wake_min = int(end.split(":")[1])
+
         # Синхронизируем значения с TimePicker
         try:
             if hasattr(self.ids, 'sleep_time'):
@@ -392,13 +429,67 @@ class SleepScreen(Screen):
         except:
             pass
 
+    def on_sleep_hour(self, instance, value):
+        """При изменении часа сна обновляем TimePicker"""
+        if hasattr(self.ids, 'sleep_time'):
+            self.ids.sleep_time.hour = value
+    
+    def on_sleep_min(self, instance, value):
+        """При изменении минуты сна обновляем TimePicker"""
+        if hasattr(self.ids, 'sleep_time'):
+            self.ids.sleep_time.minute = value
+    
+    def on_wake_hour(self, instance, value):
+        """При изменении часа пробуждения обновляем TimePicker"""
+        if hasattr(self.ids, 'wake_time'):
+            self.ids.wake_time.hour = value
+    
+    def on_wake_min(self, instance, value):
+        """При изменении минуты пробуждения обновляем TimePicker"""
+        if hasattr(self.ids, 'wake_time'):
+            self.ids.wake_time.minute = value
+
+        # Добавьте для отладки
+        app = App.get_running_app()
+        print(f"SleepScreen: текущая selected_date = {app.selected_date}")
+
     def go_next(self):
         print("Сон:", f"{self.sleep_hour:02d}:{self.sleep_min:02d}", 
               "-", f"{self.wake_hour:02d}:{self.wake_min:02d}")
         app = App.get_running_app()
+        key = app.selected_date
+    
+        # Проверяем, что значения не пустые
+        print(f"sleep_hour = {self.sleep_hour}, sleep_min = {self.sleep_min}")
+        print(f"wake_hour = {self.wake_hour}, wake_min = {self.wake_min}")
+    
+        # Сохраняем данные
+        data = daily_store.get(key) if daily_store.exists(key) else {}
+        print(f"Данные до сохранения: {data}")
+    
+        data["sleep_start"] = f"{self.sleep_hour:02d}:{self.sleep_min:02d}"
+        data["sleep_end"] = f"{self.wake_hour:02d}:{self.wake_min:02d}"
+    
+        daily_store.put(key, **data)
+    
+        # Проверяем, что сохранилось
+        saved_data = daily_store.get(key)
+        print(f"Данные после сохранения: {saved_data}")
+        print(f"sleep_start = {saved_data.get('sleep_start')}")
+        print(f"sleep_end = {saved_data.get('sleep_end')}")
+    
         app.go_to_mood()
 
-        key = App.get_running_app().selected_date
+    def on_sleep_time_changed(self, instance, value):
+        # Обновляем свойства при изменении времени
+        self.sleep_hour = self.ids.sleep_time.hour
+        self.sleep_min = self.ids.sleep_time.minute
+        print(f"Время сна обновлено: {self.sleep_hour}:{self.sleep_min}")
+
+    def on_wake_time_changed(self, instance, value):
+        self.wake_hour = self.ids.wake_time.hour
+        self.wake_min = self.ids.wake_time.minute
+        print(f"Время пробуждения обновлено: {self.wake_hour}:{self.wake_min}")
 
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.image import Image
@@ -408,13 +499,13 @@ class EmotionCarousel(RelativeLayout):
     index = NumericProperty(0)
 
     emotions = ListProperty([
-        ("Ярость", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Ярость.png"),
-        ("Раздражение", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Раздражение.png"),
-        ("Безразличие", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Безразличие.png"),
-        ("Счастье", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Счастье.png"),
-        ("Спокойствие", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Спокойствие.png"),
-        ("Смущение", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Смущение.png"),
-        ("Грусть", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Грусть.png"),
+        ("Ярость", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Ярость(2).png"),
+        ("Раздражение", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Раздражение(1).png"),
+        ("Безразличие", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Безразличие(1).png"),
+        ("Счастье", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Счастье(1).png"),
+        ("Спокойствие", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Спокойствие(1).png"),
+        ("Смущение", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Смущение(1).png"),
+        ("Грусть", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Грусть(1).png"),
     ])
 
     emotion_name = StringProperty("")
@@ -484,13 +575,22 @@ class ResultSleepScreen(Screen):
     sleep_hours = NumericProperty(0)
 
     def on_pre_enter(self):
-        today = datetime.now().strftime("%Y-%m-%d")
-        if daily_store.exists(today):
-            start = daily_store.get(today).get("sleep_start", "")
-            end = daily_store.get(today).get("sleep_end", "")
-
+        app = App.get_running_app()
+        key = app.selected_date
+    
+        if daily_store.exists(key):
+            data = daily_store.get(key)
+        
+            start = data.get("sleep_start", "")
+            end = data.get("sleep_end", "")
+        
             if start and end:
                 self.sleep_hours = self.calc_sleep(start, end)
+                print(f"Рассчитано часов сна: {self.sleep_hours}")
+            else:
+                self.sleep_hours = 0
+        else:
+            self.sleep_hours = 0
 
     def calc_sleep(self, start, end):
         t1 = datetime.strptime(start, "%H:%M")
@@ -607,7 +707,6 @@ kv_string = '''
             pos_hint: {"x": -0.04, "y": -0.15}
 
         # ПОЛЕ ВВОДА
-        # ПОЛЕ ВВОДА
         TextInput:
             id: username
             hint_text: ""                      # отключаем стандартный hint
@@ -664,7 +763,6 @@ kv_string = '''
                     radius: [self.height/2]   # <-- ЭТО ДЕЛАЕТ КНОПКУ ОВАЛЬНОЙ!
 
 <InfoScreen>:
-
     FloatLayout:
 
         # ФОН
@@ -731,7 +829,6 @@ kv_string = '''
                     radius: [self.height/2]   # <-- ЭТО ДЕЛАЕТ КНОПКУ ОВАЛЬНОЙ!
 
 <GreetingScreen>:
-    
     FloatLayout:
 
         # Фон
@@ -1668,13 +1765,15 @@ kv_string = '''
                 color: 0.7137, 0.5294, 0.5294, 1
                 size: self.parent.size
                 pos: self.parent.pos
-                on_release: app.go_to_mood()
+                on_release: 
+                    root.go_next()
+                    app.go_to_mood()
 
 <EmotionCarousel>:
     id: carousel
     canvas.before:
         Color:
-            rgba: 1,1,1,0
+            rgba: 0,0,0,0
         Rectangle:
             pos: self.pos
             size: self.size   
@@ -1711,7 +1810,7 @@ kv_string = '''
             font_name: "Gilroy-Medium"
             font_size: "30sp"
             color: 0.7137, 0.5294, 0.5294, 1
-            pos_hint: {"x": 0.1, "y": 0.3}
+            pos_hint: {"center_x": 0.5, "y": 0.3}
 
         EmotionCarousel:
             id: carousel
@@ -1758,8 +1857,14 @@ kv_string = '''
 
             Button:
                 text: "Подобрать"
-                size_hint: 0.6, 0.1
-                pos_hint: {"center_x":0.5, "center_y":0.2}
+                size_hint: 0.7, 0.14
+                pos_hint: {"center_x":0.5, "center_y":-0.02}
+                font_name: "Gilroy-SemiBold"
+                font_size: "18sp"
+                color: 0.7137, 0.5294, 0.5294, 1
+                background_normal: ""
+                background_color: (0, 0, 0, 0)  # Белый фон
+                border: (0, 0, 0, 0)
 
                 on_release:
                     carousel.save_emotion()
@@ -1767,12 +1872,12 @@ kv_string = '''
 
                 canvas.before:
                     Color:
-                        rgba: 1, 1, 1, 1
+                        rgba: 1, 1, 1, 1  # Белый цвет
                     RoundedRectangle:
                         pos: self.pos
                         size: self.size
-                        radius: [self.height/2]
-        
+                        radius: [self.height / 2]  # Полукруглая форма
+
         # Кнопка далее
         Button:
             text: ">"
@@ -1896,18 +2001,6 @@ kv_string = '''
                 pos_hint: {"center_x":0.5, "center_y":0.7}
                 color: 0.7,0.5,0.5,1
 
-        # ТЕКСТ
-        # Label:
-        #     text:
-        #         "Вы прекрасно справились с водным балансом!"
-        #         if root.water >= root.goal else
-        #         "Вам стоит пить больше воды"
-        #     size_hint: .8, .2
-        #     pos_hint: {"center_x":0.5, "y":0.25}
-        #     halign: "center"
-        #     text_size: self.size
-        #     color: 0.7,0.5,0.5,1
-
         # КАРТОЧКА
         Label:
             text: "Начните утро со стакана воды"
@@ -1976,17 +2069,6 @@ kv_string = '''
             pos_hint: {"center_x":0.5, "center_y":0.55}
             color: 0.7,0.5,0.5,1
 
-        # Label:
-        #     text:
-        #         "Отличная активность!"
-        #         if root.steps >= root.goal else
-        #         "Попробуйте больше двигаться"
-        #     size_hint: .8, .2
-        #     pos_hint: {"center_x":0.5, "y":0.25}
-        #     halign: "center"
-        #     text_size: self.size
-        #     color: 0.7,0.5,0.5,1
-
         Button:
             text: ">"
             pos_hint: {"right":0.95, "y":0.05}
@@ -2015,17 +2097,6 @@ kv_string = '''
             font_size: "40sp"
             pos_hint: {"center_x":0.5, "center_y":0.6}
             color: 0.7,0.5,0.5,1
-
-        # Label:
-        #     text:
-        #         "Отличный сон!"
-        #         if root.sleep_hours >= 7 else
-        #         "Недостаток сна влияет на здоровье"
-        #     size_hint: .8, .2
-        #     pos_hint: {"center_x":0.5, "y":0.25}
-        #     halign: "center"
-        #     text_size: self.size
-        #     color: 0.7,0.5,0.5,1
 
         Button:
             text: ">"

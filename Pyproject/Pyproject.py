@@ -19,11 +19,11 @@ Window.size = (390, 844)
 
 
 #Регистрация шрифтов
-LabelBase.register(name="Gilroy-MediumItalic", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-MediumItalic.otf")
-LabelBase.register(name="Gilroy-Medium", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-Medium.otf")
-LabelBase.register(name="Gilroy-RegularItalic", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-RegularItalic.otf")
-LabelBase.register(name="Gilroy-Regular", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-Regular.otf")
-LabelBase.register(name="Gilroy-SemiBold", fn_regular="C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Gilroy-SemiBold.otf")
+LabelBase.register(name="Gilroy-MediumItalic", fn_regular="Gilroy-MediumItalic.otf")
+LabelBase.register(name="Gilroy-Medium", fn_regular="Gilroy-Medium.otf")
+LabelBase.register(name="Gilroy-RegularItalic", fn_regular="Gilroy-RegularItalic.otf")
+LabelBase.register(name="Gilroy-Regular", fn_regular="Gilroy-Regular.otf")
+LabelBase.register(name="Gilroy-SemiBold", fn_regular="Gilroy-SemiBold.otf")
 
 store = JsonStore("user.json") # Для имени пользователя
 daily_store = JsonStore("daily.json")# Для ежедневных данных
@@ -499,13 +499,13 @@ class EmotionCarousel(RelativeLayout):
     index = NumericProperty(0)
 
     emotions = ListProperty([
-        ("Ярость", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Ярость(2).png"),
-        ("Раздражение", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Раздражение(1).png"),
-        ("Безразличие", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Безразличие(1).png"),
-        ("Счастье", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Счастье(1).png"),
-        ("Спокойствие", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Спокойствие(1).png"),
-        ("Смущение", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Смущение(1).png"),
-        ("Грусть", "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Грусть(1).png"),
+        ("Ярость", "Ярость(2).png"),
+        ("Раздражение", "Раздражение(1).png"),
+        ("Безразличие", "Безразличие(1).png"),
+        ("Счастье", "Счастье(1).png"),
+        ("Спокойствие", "Спокойствие(1).png"),
+        ("Смущение", "Смущение(1).png"),
+        ("Грусть", "Грусть(1).png"),
     ])
 
     emotion_name = StringProperty("")
@@ -668,7 +668,7 @@ kv_string = '''
 
         # ФОН
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон (1).png"
+            source: "фон (1).png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -676,7 +676,7 @@ kv_string = '''
 
         # ЛОГОТИП СВЕРХУ СПРАВА
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/цветочек.png"
+            source: "цветочек.png"
             size_hint: (0.15, 0.15)
             pos_hint: {"right": 0.95, "top": 0.98}
 
@@ -767,14 +767,14 @@ kv_string = '''
 
         # ФОН
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон (1).png"
+            source: "фон (1).png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
             pos: self.parent.pos
 
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/цветочек.png"
+            source: "цветочек.png"
             size_hint: (0.15, 0.15)
             pos_hint: {"right": 0.95, "top": 0.98}
 
@@ -833,7 +833,7 @@ kv_string = '''
 
         # Фон
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон2.png"
+            source: "фон2.png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -875,7 +875,7 @@ kv_string = '''
     FloatLayout:
         #Фоновое изображение
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон (1).png"
+            source: "фон (1).png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -939,7 +939,7 @@ kv_string = '''
                 
             Image:
                 # can use the small flower icon or other
-                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/вода.png"
+                source: "вода.png"
                 size_hint_x: 0.18
             BoxLayout:
                 orientation: "vertical"
@@ -977,7 +977,7 @@ kv_string = '''
                     width: 1.0
                     rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
             Image:
-                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/шаги.png"
+                source: "шаги.png"
                 size_hint_x: 0.18
             BoxLayout:
                 orientation: "vertical"
@@ -1034,7 +1034,7 @@ kv_string = '''
                 pos_hint: {"center_x": 0.5, "center_y": 0.1}
                 
                 Image:
-                    source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/home.png"
+                    source: "home.png"
                     allow_stretch: True
                     keep_ratio: True
                     size: self.parent.size
@@ -1054,7 +1054,7 @@ kv_string = '''
                 pos_hint: {"center_x": 0.5, "center_y": 0.1}
                 
                 Image:
-                    source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Статистика.png"
+                    source: "Статистика.png"
                     allow_stretch: True
                     keep_ratio: True
                     size: self.parent.size
@@ -1074,7 +1074,7 @@ kv_string = '''
                 pos_hint: {"center_x": 0.5, "center_y": 0.1}
                 
                 Image:
-                    source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Результаты.png"
+                    source: "Результаты.png"
                     allow_stretch: True
                     keep_ratio: True
                     size: self.parent.size
@@ -1106,8 +1106,8 @@ kv_string = '''
 
             # Кнопка "+" справа (исправленная)
             Button:
-                background_normal: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Начать.png"
-                background_down: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Начать.png"
+                background_normal: "Начать.png"
+                background_down: "Начать.png"
                 size_hint: None, None
                 size: 45, 45
                 pos_hint: {"right": 0.94, "center_y": 0.43}
@@ -1137,7 +1137,7 @@ kv_string = '''
     name: "share"
     FloatLayout:
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон2.png"
+            source: "фон2.png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -1203,7 +1203,7 @@ kv_string = '''
     FloatLayout:
         # Фон
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для опроса.png"
+            source: "фон для опроса.png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -1241,7 +1241,7 @@ kv_string = '''
 
         # Стакан воды (только фон)
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/стакан.png"
+            source: "стакан.png"
             size_hint: 0.7, 0.38
             pos_hint: {"center_x": 0.5, "center_y": 0.45}
 
@@ -1273,8 +1273,8 @@ kv_string = '''
 
             # Кнопка +100мл (ИСПРАВЛЕНА)
             Button:
-                background_normal: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Начать (2).png"
-                background_down: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/Начать (2).png"
+                background_normal: "Начать (2).png"
+                background_down: "Начать (2).png"
                 background_color: (1, 1, 1, 1)
                 size_hint: None, None
                 size: 45, 45
@@ -1336,7 +1336,7 @@ kv_string = '''
 
         # ФОН
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для опроса.png"
+            source: "фон для опроса.png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -1608,7 +1608,7 @@ kv_string = '''
     FloatLayout:
         # Фон
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+            source: "фон для сна и эмоций.png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -1788,7 +1788,7 @@ kv_string = '''
             pos_hint: {"x": 0, "y": 0}
 
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+            source: "фон для сна и эмоций.png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -1902,7 +1902,7 @@ kv_string = '''
     name: "share_2"
     FloatLayout:
         Image:
-            source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон2.png"
+            source: "фон2.png"
             allow_stretch: True
             keep_ratio: False
             size: self.parent.size
@@ -1971,7 +1971,7 @@ kv_string = '''
     FloatLayout:
         canvas.before:
             Rectangle:
-                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+                source: "фон для сна и эмоций.png"
                 size: self.size
                 pos: self.pos
 
@@ -1994,7 +1994,7 @@ kv_string = '''
             pos_hint: {"center_x":0.5, "center_y":0.55}
 
             Image:
-                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/стакан.png"
+                source: "стакан.png"
                 pos_hint: {"center_x": 0.5, "center_y": 0.5}
                 size_hint: 1,1
 
@@ -2062,7 +2062,7 @@ kv_string = '''
     FloatLayout:
         canvas.before:
             Rectangle:
-                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+                source: "фон для сна и эмоций.png"
                 size: self.size
                 pos: self.pos
 
@@ -2117,7 +2117,7 @@ kv_string = '''
     FloatLayout:
         canvas.before:
             Rectangle:
-                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+                source: "фон для сна и эмоций.png"
                 size: self.size
                 pos: self.pos
 

@@ -1977,13 +1977,15 @@ kv_string = '''
 
         Label:
             text: "Результаты"
+            font_name: "Gilroy-Medium"
             font_size: "32sp"
-            pos_hint: {"x": -0.3, "y": 0.4}
+            pos_hint: {"x": -0.24, "y": 0.4}
             color: 0.7,0.5,0.5,1
 
         Label:
-            text: "01.11 пн"
-            pos_hint: {"x": -0.4, "y": 0.35}
+            text: app.selected_date
+            font_name: "Gilroy-Medium"
+            pos_hint: {"x": -0.36, "y": 0.36}
             color: 0.7,0.5,0.5,1
 
         # СТАКАН
@@ -1998,14 +2000,27 @@ kv_string = '''
 
             Label:
                 text: f"{root.water}/1000 ml"
-                pos_hint: {"center_x":0.5, "center_y":0.7}
+                font_name: "Gilroy-Medium"
+                pos_hint: {"center_x":0.5, "center_y":0.75}
                 color: 0.7,0.5,0.5,1
+                font_size: "22sp"
+
+        Label:
+            text: "Вы прекрасно справились с водным балансом!"
+            halign: "left"
+            font_name: "Gilroy-Medium"
+            font_size: "18sp"
+            color: 0.7137, 0.5294, 0.5294, 1
+            pos_hint: {"x": 0.062, "y": -0.15}
+            text_size: self.width, None
 
         # КАРТОЧКА
         Label:
-            text: "Начните утро со стакана воды"
+            text: "Начните утро со стакана воды - это простой\\nспособ задать тон дню."
+            font_name: "Gilroy-Medium"
             size_hint: .8, .15
-            pos_hint: {"center_x":0.5, "y":0.1}
+            pos_hint: {"center_x":0.5, "y":0.15}
+            color: 0.7,0.5,0.5,1
             canvas.before:
                 Color:
                     rgba: 1,1,1,0.8
@@ -2014,12 +2029,32 @@ kv_string = '''
                     size: self.size
                     radius: [20]
 
-        Button:
-            text: ">"
-            pos_hint: {"right":0.95, "y":0.05}
-            size_hint: None,None
-            size: 60,60
-            on_release: app.root.current = "result_steps"
+        # Круглый белый контейнер для кнопки перехода
+        BoxLayout:
+            size_hint: None, None
+            width: 70
+            height: 70
+            pos_hint: {"right": 0.95, "y": 0.05}
+            padding: [0, 0]  # Убираем внутренние отступы
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [35]  # Полностью круглый
+
+            # Кнопка перехода →
+            Button:
+                text: ">"
+                font_size: "32sp"
+                background_normal: ""  # Убираем стандартный фон
+                background_color: (0, 0, 0, 0)  # Делаем полностью прозрачным
+                color: 0.7137, 0.5294, 0.5294, 1
+                size: self.parent.size
+                pos: self.parent.pos
+                on_release: app.root.current = "result_steps"
+
 
 <ResultStepsScreen>:
     name: "result_steps"

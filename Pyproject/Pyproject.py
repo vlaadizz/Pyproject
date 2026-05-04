@@ -137,7 +137,7 @@ class ModernTimePicker(BoxLayout):
         super().__init__(**kwargs)
         self.orientation = 'horizontal'
         self.size_hint_y = None
-        self.height = 200
+        self.height = 200 #привет
         
         # Часы (0-23)
         self.hours_list = list(range(00, 24))

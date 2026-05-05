@@ -244,6 +244,7 @@ class HomeScreen(Screen):
             self.current_monday = today - timedelta(days=weekday)
         self.update_calendar()
         self.update_username()
+        self.load_day_data()  # Добавлено: загружаем данные для выбранной даты
     
     def update_username(self):
         """Обновляет имя пользователя в приветствии."""
@@ -642,7 +643,7 @@ class ResultMoodScreen(Screen):
             self.mood_text = "Вы в стабильном состоянии. Отличный момент для продуктивного дня."
 
         elif self.mood in ["Счастье"]:
-            self.mood_text = "Вы в хорошем эмоциональном состоянии. Так держать ❤️"
+            self.mood_text = "Вы в хорошем эмоциональном состоянии. Так держать"
 
         else:
             self.mood_text = "Настроение не определено"
@@ -2034,7 +2035,7 @@ kv_string = '''
             size_hint: None, None
             width: 70
             height: 70
-            pos_hint: {"right": 0.95, "y": 0.05}
+            pos_hint: {"right": 0.95, "y": 0.03}
             padding: [0, 0]  # Убираем внутренние отступы
             canvas.before:
                 Color:
@@ -2054,6 +2055,84 @@ kv_string = '''
                 size: self.parent.size
                 pos: self.parent.pos
                 on_release: app.root.current = "result_steps"
+        
+        # ------------------ Нижняя навигация ------------------
+        # Контейнер для трех кнопок
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 0.7, None
+            height: 70
+            pos_hint: {"center_x": 0.37, "y": 0.03}
+            spacing: 15
+            padding: [10, 10]
+
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [35]
+
+            # Кнопка Дом - как Image с TouchBehavior
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "home.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)  # Полностью прозрачный
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: app.go_to_home()
+
+            # Аналогично для Статистики
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Статистика.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Статистика")
+
+            # Аналогично для Результатов
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Результаты.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Результаты")
 
 
 <ResultStepsScreen>:
@@ -2068,8 +2147,15 @@ kv_string = '''
 
         Label:
             text: "Результаты"
+            font_name: "Gilroy-Medium"
             font_size: "32sp"
-            pos_hint: {"x": -0.3, "y": 0.4}
+            pos_hint: {"x": -0.25, "y": 0.4}
+            color: 0.7,0.5,0.5,1
+        
+        Label:
+            text: app.selected_date
+            font_name: "Gilroy-Medium"
+            pos_hint: {"x": -0.36, "y": 0.36}
             color: 0.7,0.5,0.5,1
 
         # КРУГ
@@ -2088,7 +2174,7 @@ kv_string = '''
 
                 # ПРОГРЕСС
                 Color:
-                    rgba: 1, 0.7, 0.4, 1
+                    rgba: 1, 0.8, 0.6, 1
                 Line:
                     width: 10
                     circle: (self.center_x, self.center_y, 100, 0, root.steps / 7000 * 360)
@@ -2103,13 +2189,146 @@ kv_string = '''
             text: "шагов"
             pos_hint: {"center_x":0.5, "center_y":0.55}
             color: 0.7,0.5,0.5,1
+        
+        # Белый контейнер-карточка с первым текстом внутри
+        RelativeLayout:
+            size_hint: 0.9, None
+            height: 150
+            pos_hint: {"center_x": 0.475, "y": 0.07}
+                
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 0.9
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [25]
+            
+        # Текст 1 (внутри контейнера)
+        Label:
+            text: "Попробуйте завтра: выйти на одну остановку раньше."
+            font_name: "Gilroy-Medium"
+            font_size: "16sp"
+            color: 0.7, 0.5, 0.5, 1
+            size_hint_x: 0.9
+            pos_hint: {"center_x": 0.5, "top": 0.7}
+            halign: "center"
+            text_size: self.width, None
 
-        Button:
-            text: ">"
-            pos_hint: {"right":0.95, "y":0.05}
-            size_hint: None,None
-            size: 60,60
-            on_release: app.root.current = "result_sleep"
+        # Текст 2 (снаружи контейнера, поверх него)
+        Label:
+            text: "Сегодня у вас был не очень активный день."
+            font_name: "Gilroy-Medium"
+            font_size: "16sp"
+            color: 0.7, 0.5, 0.5, 1
+            size_hint_x: 0.9
+            pos_hint: {"center_x": 0.49, "top": 0.9}  # Выше контейнера
+            halign: "center"
+            text_size: self.width, None
+        
+        # Круглый белый контейнер для кнопки перехода
+        BoxLayout:
+            size_hint: None, None
+            width: 70
+            height: 70
+            pos_hint: {"right": 0.95, "y": 0.03}
+            padding: [0, 0]  # Убираем внутренние отступы
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [35]  # Полностью круглый
+
+            # Кнопка перехода →
+            Button:
+                text: ">"
+                font_size: "32sp"
+                background_normal: ""  # Убираем стандартный фон
+                background_color: (0, 0, 0, 0)  # Делаем полностью прозрачным
+                color: 0.7137, 0.5294, 0.5294, 1
+                size: self.parent.size
+                pos: self.parent.pos
+                on_release: app.root.current = "result_sleep"
+
+        # ------------------ Нижняя навигация ------------------
+        # Контейнер для трех кнопок
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 0.7, None
+            height: 70
+            pos_hint: {"center_x": 0.37, "y": 0.03}
+            spacing: 15
+            padding: [10, 10]
+
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [35]
+
+            # Кнопка Дом - как Image с TouchBehavior
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "home.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)  # Полностью прозрачный
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: app.go_to_home()
+
+            # Аналогично для Статистики
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Статистика.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Статистика")
+
+            # Аналогично для Результатов
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Результаты.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Результаты")
 
 <ResultSleepScreen>:
     name: "result_sleep"
@@ -2140,6 +2359,84 @@ kv_string = '''
             size: 60,60
             on_release: app.root.current = "result_mood"
 
+        # ------------------ Нижняя навигация ------------------
+        # Контейнер для трех кнопок
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 0.7, None
+            height: 70
+            pos_hint: {"center_x": 0.37, "y": 0.03}
+            spacing: 15
+            padding: [10, 10]
+
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [35]
+
+            # Кнопка Дом - как Image с TouchBehavior
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "home.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)  # Полностью прозрачный
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: app.go_to_home()
+
+            # Аналогично для Статистики
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Статистика.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Статистика")
+
+            # Аналогично для Результатов
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Результаты.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Результаты")
+
 
 <ResultMoodScreen>:
     name: "result_mood"
@@ -2147,7 +2444,7 @@ kv_string = '''
     FloatLayout:
         canvas.before:
             Rectangle:
-                source: "C:/Users/vbzai/OneDrive/Desktop/Sensa_project/фон для сна и эмоций.png"
+                source: "фон для сна и эмоций.png"
                 size: self.size
                 pos: self.pos
 
@@ -2155,7 +2452,13 @@ kv_string = '''
             text: "Результаты"
             font_size: "32sp"
             color: 0.7,0.5,0.5,1
-            pos_hint: {"x": -0.3, "y": 0.42}
+            pos_hint: {"x": -0.24, "y": 0.42}
+        
+        Label:
+            text: app.selected_date
+            font_name: "Gilroy-Medium"
+            pos_hint: {"x": -0.36, "y": 0.36}
+            color: 0.7,0.5,0.5,1
 
         Image:
             source: root.mood_image
@@ -2166,8 +2469,8 @@ kv_string = '''
         # КАРТОЧКА
         BoxLayout:
             orientation: "vertical"
-            size_hint: .85, .4
-            pos_hint: {"center_x":0.5, "center_y":0.55}
+            size_hint: .85, .2
+            pos_hint: {"center_x":0.5, "center_y":0.25}
 
             canvas.before:
                 Color:
@@ -2176,12 +2479,6 @@ kv_string = '''
                     pos: self.pos
                     size: self.size
                     radius: [25]
-
-            Label:
-                text: root.mood
-                font_size: "22sp"
-                size_hint_y: .3
-                color: 0.7,0.5,0.5,1
 
             Label:
                 text:root.mood_text
@@ -2195,7 +2492,7 @@ kv_string = '''
             text: ">"
             size_hint: None,None
             size: 70,70
-            pos_hint: {"right":0.95, "y":0.05}
+            pos_hint: {"right":0.95, "y":0.03}
             background_normal: ""
             background_color: 0,0,0,0
             color: 0.7,0.5,0.5,1
@@ -2210,6 +2507,84 @@ kv_string = '''
                     pos: self.pos
                     size: self.size
                     radius: [self.height]
+        
+        # ------------------ Нижняя навигация ------------------
+        # Контейнер для трех кнопок
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 0.7, None
+            height: 70
+            pos_hint: {"center_x": 0.37, "y": 0.03}
+            spacing: 15
+            padding: [10, 10]
+
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [35]
+
+            # Кнопка Дом - как Image с TouchBehavior
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "home.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)  # Полностью прозрачный
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: app.go_to_home()
+
+            # Аналогично для Статистики
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Статистика.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Статистика")
+
+            # Аналогично для Результатов
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Результаты.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Результаты")
 '''
 
 class MainApp(App):

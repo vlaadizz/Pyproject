@@ -1,4 +1,4 @@
-﻿from kivy.app import App
+﻿from kivy.app import App#изменение
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.storage.jsonstore import JsonStore

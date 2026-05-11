@@ -15,6 +15,11 @@ from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 
+# ===== ГРАФИКИ ДЛЯ СТАТИСТИКИ =====
+from kivy.graphics import Color, Rectangle
+from kivy.uix.widget import Widget
+from math import*
+
 Window.size = (390, 844)
 
 
@@ -27,6 +32,53 @@ LabelBase.register(name="Gilroy-SemiBold", fn_regular="Gilroy-SemiBold.otf")
 
 store = JsonStore("user.json") # Для имени пользователя
 daily_store = JsonStore("daily.json")# Для ежедневных данных
+
+class MiniChart(Widget):
+    """Мини-график для отображения данных за последние 7 дней"""
+    data = ListProperty([])  # Список значений для отображения
+    max_value = NumericProperty(100)  # Максимальное значение для нормализации
+    bar_color = ListProperty([0.9, 0.7, 0.6, 1])  # Цвет столбцов
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(data=self._update_chart, 
+                  max_value=self._update_chart,
+                  pos=self._update_chart, 
+                  size=self._update_chart)
+        Clock.schedule_once(self._update_chart, 0.1)
+    
+    def _update_chart(self, *args):
+        with self.canvas:
+            self.canvas.clear()
+            
+            if not self.data or self.width <= 0 or self.height <= 0:
+                return
+            
+            bar_count = len(self.data)
+            spacing = 3
+            available_width = self.width - spacing * (bar_count - 1)
+            bar_width = max(2, available_width / bar_count)  # минимум 2px
+            
+            max_val = max(self.data) if self.data else 1
+            if max_val <= 0:
+                max_val = 1
+            
+            for i, value in enumerate(self.data):
+                ratio = max(0.05, value / max_val)
+                bar_height = ratio * max(10, self.height - 8)
+                
+                x = self.x + i * (bar_width + spacing)
+                y = self.y + 4
+                
+                intensity = value / max_val
+                Color(
+                    self.bar_color[0] * (0.7 + 0.3 * intensity),
+                    self.bar_color[1] * (0.7 + 0.3 * intensity),
+                    self.bar_color[2] * (0.7 + 0.3 * intensity),
+                    self.bar_color[3] * (0.6 + 0.4 * intensity)
+                )
+                
+                Rectangle(pos=(x, y), size=(bar_width, bar_height))
 
 class PickerItem(Button):
     """Элемент для выбора времени"""
@@ -770,6 +822,51 @@ class SummaryScreen(Screen):
             self.mood = data.get("mood", "Не задано")
             self.mood_image = data.get("mood_image", "")
 
+        # ✅ Отложенная загрузка графиков
+        Clock.schedule_once(lambda dt: self.load_chart_data(), 0.25)
+    
+    def load_chart_data(self):
+        """Загружает данные для мини-графиков"""
+        app = App.get_running_app()
+        
+        charts_data = {
+            'steps': [],
+            'water': [],
+            'sleep': []
+        }
+        for i in range(6, -1, -1):
+            date = datetime.now() - timedelta(days=i)
+            date_key = date.strftime("%Y-%m-%d")
+            
+            if daily_store.exists(date_key):
+                data = daily_store.get(date_key)
+                charts_data['steps'].append(data.get('steps', 0))
+                charts_data['water'].append(data.get('water', 0))
+                
+                sleep_start = data.get('sleep_start', '')
+                sleep_end = data.get('sleep_end', '')
+                if sleep_start and sleep_end:
+                    hours = self.calc_sleep(sleep_start, sleep_end)
+                    charts_data['sleep'].append(hours)
+                else:
+                    charts_data['sleep'].append(0)
+            else:
+                charts_data['steps'].append(0)
+                charts_data['water'].append(0)
+                charts_data['sleep'].append(0)
+        
+        if hasattr(self.ids, 'steps_chart'):
+            self.ids.steps_chart.data = charts_data['steps']
+            self.ids.steps_chart.max_value = 10000
+        
+        if hasattr(self.ids, 'water_chart'):
+            self.ids.water_chart.data = charts_data['water']
+            self.ids.water_chart.max_value = 1000
+        
+        if hasattr(self.ids, 'sleep_chart'):
+            self.ids.sleep_chart.data = charts_data['sleep']
+            self.ids.sleep_chart.max_value = 12
+
     def calc_sleep(self, start, end):
         from datetime import datetime
         t0 = datetime.strptime(start, "%H:%M")
@@ -779,6 +876,138 @@ class SummaryScreen(Screen):
             t1 = t1.replace(day=2)
 
         return (t1 - t0).total_seconds() / 3600
+
+# ===== Добавьте класс ActivityScreen =====
+class ActivityScreen(Screen):
+    steps = NumericProperty(0)
+    goal = NumericProperty(7000)
+    percentage = NumericProperty(0)
+    
+    # Данные для графика (день/неделя/месяц)
+    daily_steps = ListProperty([])
+    weekly_steps = ListProperty([])
+    monthly_steps = ListProperty([])
+    
+    current_view = StringProperty("День")  # День / Неделя / Месяц
+
+    # ✅ Новые свойства для позиции точки на круге
+    dot_pos_x = NumericProperty(0)
+    dot_pos_y = NumericProperty(0)
+    
+    def on_pre_enter(self):
+        # Загружаем текущие шаги
+        key = App.get_running_app().selected_date
+        if daily_store.exists(key):
+            data = daily_store.get(key)
+            self.steps = data.get("steps", 0)
+        else:
+            self.steps = 0
+        self.update_dot_position()
+    
+    def on_percentage(self, instance, value):
+        """Обновляем позицию точки при изменении процента"""
+        self.update_dot_position()
+    
+    def update_dot_position(self):
+        """Вычисляем координаты точки на окружности"""
+        # Центр круга (в координатах RelativeLayout размером 250x250)
+        center_x, center_y = 125, 125
+        radius = 100
+        
+        # Угол: 90° = верх, отсчёт против часовой стрелки
+        angle = 90 - self.percentage * 3.6
+        angle_rad = radians(angle)
+        
+        # Координаты точки
+        self.dot_pos_x = center_x + radius * cos(angle_rad)
+        self.dot_pos_y = center_y + radius * sin(angle_rad)
+        
+        # Считаем процент
+        self.percentage = min(100, round(self.steps / self.goal * 100))
+        
+        # Загружаем данные для графиков
+        self.load_chart_data()
+    
+    def load_chart_data(self):
+        """Загружаем данные для всех трех режимов"""
+        # День - почасовые данные (заглушка - равномерное распределение)
+        self.daily_steps = [0, 0, 0, 0, self.steps]  # Упрощенно
+        
+        # Неделя - последние 7 дней
+        week_data = []
+        for i in range(6, -1, -1):
+            date = datetime.now() - timedelta(days=i)
+            date_key = date.strftime("%Y-%m-%d")
+            if daily_store.exists(date_key):
+                week_data.append(daily_store.get(date_key).get("steps", 0))
+            else:
+                week_data.append(0)
+        self.weekly_steps = week_data
+        
+        # Месяц - последние 30 дней (агрегировано по неделям для простоты)
+        month_data = []
+        for i in range(3, -1, -1):
+            week_sum = 0
+            for j in range(7):
+                date = datetime.now() - timedelta(days=i*7 + j)
+                date_key = date.strftime("%Y-%m-%d")
+                if daily_store.exists(date_key):
+                    week_sum += daily_store.get(date_key).get("steps", 0)
+            month_data.append(week_sum)
+        self.monthly_steps = month_data
+    
+    def set_view(self, view):
+        """Переключение между День/Неделя/Месяц"""
+        self.current_view = view
+
+class ActivityChart(Widget):
+    data = ListProperty([])
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(data=self._draw_chart, pos=self._draw_chart, size=self._draw_chart)
+        Clock.schedule_once(self._draw_chart, 0.1)
+    
+    def _draw_chart(self, *args):
+        with self.canvas:
+            self.canvas.clear()
+            
+            if not self.data or self.width <= 0:
+                return
+            
+            bar_count = len(self.data)
+            max_val = max(self.data) if self.data else 1
+            if max_val == 0:
+                max_val = 1
+            
+            # Линия цели (7000 шагов)
+            goal_y = self.y + self.height * 0.8
+            Color(0.9, 0.85, 0.8, 0.5)
+            #Line(points=[self.x, goal_y, self.right, goal_y], width=1)
+            
+            # Рисуем столбцы
+            spacing = 4
+            bar_width = (self.width - spacing * (bar_count + 1)) / bar_count
+            
+            for i, value in enumerate(self.data):
+                ratio = min(1.0, value / max_val)
+                bar_height = ratio * self.height * 0.85
+                
+                x = self.x + spacing + i * (bar_width + spacing)
+                y = self.y + 5
+                
+                # Градиент: последние дни ярче
+                time_factor = 0.3 + 0.7 * (i / max(1, bar_count - 1))
+                value_intensity = value / max_val if max_val > 0 else 0.5
+                
+                Color(
+                    1.0 * (0.6 + 0.4 * value_intensity),
+                    0.7 * (0.6 + 0.4 * value_intensity),
+                    0.4 * (0.6 + 0.4 * value_intensity),
+                    0.4 + 0.6 * time_factor
+                )
+                
+                Rectangle(pos=(x, y), size=(bar_width, bar_height))
 
 # KV код как строка
 kv_string = '''
@@ -2480,9 +2709,15 @@ kv_string = '''
 
         Label:
             text: f"{root.sleep_hours} часов"
-            font_size: "40sp"
+            font_size: "14sp"
             pos_hint: {"center_x":0.5, "center_y":0.6}
             color: 0.7,0.5,0.5,1
+        
+        # Стакан воды (только фон)
+        Image:
+            source: "картинка для ResultSleepScreen.png"
+            size_hint: 1.1, 0.78
+            pos_hint: {"center_x": 0.5, "center_y": 0.45}
 
         Button:
             text: ">"
@@ -2828,15 +3063,172 @@ kv_string = '''
             color: 0.7,0.5,0.5,1
             pos_hint: {"x": -0.3, "y": 0.42}
 
-        # ===== АКТИВНОСТЬ =====
+        # ===== АКТИВНОСТЬ (только шаги) =====
         Button:
             size_hint: .9, .12
             pos_hint: {"center_x":0.5, "top":0.75}
             background_normal: ""
             background_color: 0,0,0,0
+            on_release: app.go_to_activity()
+            
+            canvas.before:
+                Color:
+                    rgba: 1,1,1,1 
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [20]
+                Color:
+                    rgba: 0.7137, 0.5294, 0.5294, 0.8
+                Line:
+                    width: 1.0
+                    rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
+            
+            RelativeLayout:
+                # Текст "Активность" вверху слева
+                Label:
+                    text: "Активность"
+                    font_name: "Gilroy-Medium"
+                    font_size: "15sp"
+                    color: 0.7,0.5,0.5,1
+                    size_hint: None, None
+                    size: self.texture_size
+                    pos_hint: {"x": 0.39, "top": 7.85}
+                
+                # Значение шагов внизу слева
+                Label:
+                    text: "[font=Gilroy-SemiBold]{} шагов[/font]".format(root.steps)
+                    markup: True
+                    font_size: "24sp"
+                    color: 0.7,0.5,0.5,1
+                    size_hint: None, None
+                    size: self.texture_size
+                    pos_hint: {"x": 0.39, "top": 7.15}
+
+            # Правая часть с графиком
+            RelativeLayout: 
+                padding: [5, 0, 0, 0]
+                    
+                # График ТОЛЬКО для шагов
+                MiniChart:
+                    id: steps_chart
+                    pos_hint: {"x": 3.42, "top": 7.75}
+                    size_hint: 1, 1
+                    bar_color: 0.9, 0.7, 0.6, 1
+        
+        # ===== ВОДА =====
+        Button:
+            size_hint: .9, .12
+            pos_hint: {"center_x":0.5, "top":0.6}
+            background_normal: ""
+            background_color: 0,0,0,0
+            
+            canvas.before:
+                Color:
+                    rgba: 1,1,1,1 
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [20]
+                Color:
+                    rgba: 0.7137, 0.5294, 0.5294, 0.8
+                Line:
+                    width: 1.0
+                    rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
+            
+            RelativeLayout:
+                # Текст "Вода" вверху слева
+                Label:
+                    text: "Вода"
+                    font_name: "Gilroy-Medium"
+                    font_size: "15sp"
+                    color: 0.7,0.5,0.5,1
+                    size_hint: None, None
+                    size: self.texture_size
+                    pos_hint: {"x": 0.39, "top": 6.25}
+                
+                # Значение шагов внизу слева
+                Label:
+                    text: "[font=Gilroy-SemiBold]{} мл[/font]".format(root.water)
+                    markup: True
+                    font_size: "24sp"
+                    color: 0.7,0.5,0.5,1
+                    size_hint: None, None
+                    size: self.texture_size
+                    pos_hint: {"x": 0.39, "top": 5.55}
+
+            # Правая часть с графиком
+            RelativeLayout: 
+                padding: [5, 0, 0, 0]
+                    
+                # График ТОЛЬКО для шагов
+                MiniChart:
+                    id: water_chart
+                    pos_hint: {"x": 3.42, "top": 6.15}
+                    size_hint: 1, 1
+                    bar_color: 0.9, 0.7, 0.6, 1
+        
+        # ===== СОН =====
+        Button:
+            size_hint: .9, .12
+            pos_hint: {"center_x":0.5, "top":0.45}
+            background_normal: ""
+            background_color: 0,0,0,0
+            
+            canvas.before:
+                Color:
+                    rgba: 1,1,1,1 
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [20]
+                Color:
+                    rgba: 0.7137, 0.5294, 0.5294, 0.8
+                Line:
+                    width: 1.0
+                    rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
+            
+            RelativeLayout:
+                # Текст "Сон" вверху слева
+                Label:
+                    text: "Сон"
+                    font_name: "Gilroy-Medium"
+                    font_size: "15sp"
+                    color: 0.7,0.5,0.5,1
+                    size_hint: None, None
+                    size: self.texture_size
+                    pos_hint: {"x": 0.39, "top": 4.65}
+                
+                # Значение шагов внизу слева
+                Label:
+                    text: "[font=Gilroy-SemiBold]{} ч {} мин[/font]".format(root.sleep_hours,root.sleep_minutes)
+                    markup: True
+                    font_size: "24sp"
+                    color: 0.7,0.5,0.5,1
+                    size_hint: None, None
+                    size: self.texture_size
+                    pos_hint: {"x": 0.39, "top": 3.95}
+
+            # Правая часть с графиком
+            RelativeLayout: 
+                padding: [5, 0, 0, 0]
+                    
+                # График ТОЛЬКО для шагов
+                MiniChart:
+                    id: sleep_chart
+                    pos_hint: {"x": 3.42, "top": 4.55}
+                    size_hint: 1, 1
+                    bar_color: 0.9, 0.7, 0.6, 1
+        
+        # ===== НАСТРОЕНИЕ =====
+        Button:
+            size_hint: .9, .12
+            pos_hint: {"center_x":0.5, "top":0.3}
+            background_normal: ""
+            background_color: 0,0,0,0
             color: 0.7137, 0.5294, 0.5294, 1 
             on_release:
-                app.root.current = "stats_steps"
+                app.root.current = "stats_mood"
 
             canvas.before:
                 Color:
@@ -2845,131 +3237,333 @@ kv_string = '''
                     pos: self.pos
                     size: self.size
                     radius: [20]
-                        # Коричневая линия по границе
                 Color:
-                    rgba: 0.7137, 0.5294, 0.5294, 0.8  # Коричневый цвет
+                    rgba: 0.7137, 0.5294, 0.5294, 0.8
                 Line:
                     width: 1.0
                     rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
 
-            BoxLayout:
-                padding: 20
-                spacing: 10
-
+            RelativeLayout:
+                # Текст "Настроение" вверху слева
                 Label:
-                    text: "Активность\\n[font=Gilroy-SemiBold]{} шагов[/font]".format(root.steps)
-                    markup: True
+                    text: "Настроение"
+                    font_name: "Gilroy-Medium"
+                    font_size: "15sp"
                     color: 0.7,0.5,0.5,1
-
-                Image:
-                    source: "Шаги.png"
-        
-
-        # ===== ВОДА =====
-        Button:
-            size_hint: .9, .12
-            pos_hint: {"center_x":0.5, "top":0.6}
-            background_normal: ""
-            background_color: 0,0,0,0
-
-            on_release:
-                app.root.current = "stats_water"
-
-            canvas.before:
-                Color:
-                    rgba: 1,1,1,0.8
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [20]
-
-            BoxLayout:
-                padding: 20
-
+                    size_hint: None, None
+                    size: self.texture_size
+                    pos_hint: {"x": 0.39, "top": 3.05}
+                
+                # Значение воды внизу слева
                 Label:
-                    text: "Вода\\n[font=Gilroy-SemiBold]{} мл[/font]".format(root.water)
+                    text: "[font=Gilroy-SemiBold]{}[/font]".format(root.mood)
                     markup: True
+                    font_size: "24sp"
                     color: 0.7,0.5,0.5,1
-                    pos_hint: {"x": 0.2, "y": 9.87}
-
-                Image:
-                    source: "Вода.png"
-
-        # ===== СОН =====
-        Button:
-            size_hint: .9, .12
-            pos_hint: {"center_x":0.5, "top":0.45}
-            background_normal: ""
-            background_color: 0,0,0,0
-
-            on_release:
-                app.root.current = "stats_sleep"
-
-            canvas.before:
-                Color:
-                    rgba: 1,1,1,0.8
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [20]
-
-            BoxLayout:
-                padding: 20
-
-                Label:
-                    text: "Сон\\n[font=Gilroy-SemiBold]{} ч {} мин[/font]".format(root.sleep_hours, root.sleep_minutes)
-                    markup: True
-                    color: 0.7,0.5,0.5,1
-
-                Image:
-                    source: "сон.png"
-
-        # ===== НАСТРОЕНИЕ =====
-        Button:
-            size_hint: .9, .12
-            pos_hint: {"center_x":0.5, "top":0.3}
-            background_normal: ""
-            background_color: 0,0,0,0
-
-            on_release:
-                app.root.current = "stats_mood"
-
-            canvas.before:
-                Color:
-                    rgba: 1,1,1,0.8
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [20]
-
-            BoxLayout:
-                padding: 20
-
-                Label:
-                    text: "Настроение\\n[font=Gilroy-SemiBold]{}[/font]".format(root.mood)
-                    markup: True
-                    color: 0.7,0.5,0.5,1
-
+                    size_hint: None, None
+                    size: self.texture_size
+                    pos_hint: {"x": 0.39, "top": 2.35}
+                
+                # Картинка справа (закреплена к правому краю)
                 Image:
                     source: root.mood_image
-
-        # Нижняя панель (как у тебя)
+                    size_hint: None, None
+                    size: 105, 105
+                    pos_hint: {"x": 3.5, "top": 3.05}
+        
+        # ------------------ Нижняя навигация ------------------
+        # Контейнер для трех кнопок
         BoxLayout:
-            size_hint: .8, .08
-            pos_hint: {"center_x":0.5, "y":0.02}
-            spacing: 20
+            orientation: "horizontal"
+            size_hint: 0.7, None
+            height: 70
+            pos_hint: {"center_x": 0.37, "y": 0.03}
+            spacing: 15
+            padding: [10, 10]
 
-            Button:
-                text: "🏠"
-                on_release: app.go_to_home()
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [35]
 
-            Button:
-                text: "📊"
-                on_release: app.root.current = "summary"
+            # Кнопка Дом - как Image с TouchBehavior
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "home.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)  # Полностью прозрачный
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: app.go_to_home()
 
-            Button:
-                text: "❤️"
-                on_release: app.root.current = "result_mood"
+            # Аналогично для Статистики
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Статистика.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: app.go_to_summary()
+
+            # Аналогично для Результатов
+            RelativeLayout:
+                size_hint: None, None
+                size: 45, 45
+                pos_hint: {"center_x": 0.5, "center_y": 0.1}
+                
+                Image:
+                    source: "Результаты.png"
+                    allow_stretch: True
+                    keep_ratio: True
+                    size: self.parent.size
+                    pos: self.parent.pos
+                
+                Button:
+                    background_normal: ""
+                    background_color: (0, 0, 0, 0)
+                    size: self.parent.size
+                    pos: self.parent.pos
+                    on_release: print("Результаты")
+
+# ===== Кастомный круговой прогресс =====
+<CircularProgress>:
+    size_hint: None, None
+    size: 200, 200
+
+# ===== ActivityScreen =====
+<ActivityScreen>:
+    name: "activity"
+    
+    FloatLayout:
+        canvas.before:
+            Rectangle:
+                source: "фон для сна и эмоций.png"
+                size: self.size
+                pos: self.pos
+        
+        # Заголовок
+        Label:
+            text: "Активность"
+            font_name: "Gilroy-Regular"
+            font_size: "36sp"
+            color: 0.7137, 0.5294, 0.5294, 1
+            pos_hint: {"x": -0.18, "top": 1.39}
+        
+        # Кнопка назад
+        Button:
+            text: "<"
+            size_hint: None, None
+            size: 44, 44
+            pos_hint: {"right": 0.92, "top": 0.91}
+            background_normal: ""
+            background_color: 1, 1, 1, 0.5
+            color: 0.7137, 0.5294, 0.5294, 1
+            font_size: "24sp"
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                Ellipse:
+                    pos: self.pos
+                    size: self.size
+            on_release: app.root.current = "summary"
+        
+        # Процент от цели
+        Label:
+            text: "{}% от сегодняшней цели!".format(root.percentage)
+            font_name: "Gilroy-Medium"
+            font_size: "20sp"
+            color: 0.7137, 0.5294, 0.5294, 1
+            pos_hint: {"center_x": 0.5, "top": 1.28}
+        
+        # Круговой прогресс
+        RelativeLayout:
+            size_hint: None, None
+            size: 250, 250
+            pos_hint: {"center_x": 0.5, "center_y": 0.58}
+            
+            # Фоновый круг
+            Widget:
+                canvas:
+                    Color:
+                        rgba: 0.95, 0.85, 0.75, 0.3
+                    Line:
+                        width: 12
+                        circle: (self.center_x, self.center_y, 100, 0, 360)
+            
+            # Прогресс-дуга
+            Widget:
+                canvas:
+                    Color:
+                        rgba: 1.0, 0.7, 0.4, 1.0
+                    Line:
+                        width: 12
+                        circle: (self.center_x, self.center_y, 100, 90, 90 - root.percentage * 3.6)
+            
+            # Точка на конце дуги
+            Widget:
+                canvas:
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    Ellipse:
+                        pos: root.dot_pos_x - 6, root.dot_pos_y - 6
+                        size: 12, 12
+            
+            # Иконка шагов (ножки)
+            Label:
+                text: "👣"  # Можно заменить на Image с вашей иконкой
+                font_size: "32sp"
+                pos_hint: {"center_x": 0.5, "center_y": 0.65}
+            
+            # Значение шагов
+            Label:
+                text: "{}".format(root.steps)
+                font_name: "Gilroy-SemiBold"
+                font_size: "36sp"
+                color: 0.7137, 0.5294, 0.5294, 1
+                pos_hint: {"center_x": 0.5, "center_y": 0.52}
+            
+            Label:
+                text: "шагов"
+                font_name: "Gilroy-Medium"
+                font_size: "18sp"
+                color: 0.7137, 0.5294, 0.5294, 1
+                pos_hint: {"center_x": 0.5, "center_y": 0.42}
+        
+        # Блок с графиком
+        BoxLayout:
+            orientation: "vertical"
+            size_hint: 0.9, 0.32
+            pos_hint: {"center_x": 0.5, "y": 0.05}
+            padding: [15, 15]
+            spacing: 10
+            
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 0.9
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [25]
+            
+            # Переключатели День/Неделя/Месяц
+            BoxLayout:
+                orientation: "horizontal"
+                size_hint_y: None
+                height: 40
+                spacing: 10
+                padding: [5, 5]
+                
+                Button:
+                    text: "День"
+                    background_normal: ""
+                    background_color: (1.0, 0.9, 0.8, 1) if root.current_view == "День" else (0, 0, 0, 0)
+                    color: 0.7137, 0.5294, 0.5294, 1
+                    font_name: "Gilroy-Medium"
+                    font_size: "16sp"
+                    canvas.before:
+                        Color:
+                            rgba: (1, 0.9, 0.8, 0.5) if root.current_view == "День" else (0, 0, 0, 0)
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [20]
+                    on_release: root.set_view("День")
+                
+                Button:
+                    text: "Неделя"
+                    background_normal: ""
+                    background_color: (1.0, 0.9, 0.8, 1) if root.current_view == "Неделя" else (0, 0, 0, 0)
+                    color: 0.7137, 0.5294, 0.5294, 1
+                    font_name: "Gilroy-Medium"
+                    font_size: "16sp"
+                    canvas.before:
+                        Color:
+                            rgba: (1, 0.9, 0.8, 0.5) if root.current_view == "Неделя" else (0, 0, 0, 0)
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [20]
+                    on_release: root.set_view("Неделя")
+                
+                Button:
+                    text: "Месяц"
+                    background_normal: ""
+                    background_color: (1.0, 0.9, 0.8, 1) if root.current_view == "Месяц" else (0, 0, 0, 0)
+                    color: 0.7137, 0.5294, 0.5294, 1
+                    font_name: "Gilroy-Medium"
+                    font_size: "16sp"
+                    canvas.before:
+                        Color:
+                            rgba: (1, 0.9, 0.8, 0.5) if root.current_view == "Месяц" else (0, 0, 0, 0)
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [20]
+                    on_release: root.set_view("Месяц")
+            
+            # Цель
+            Label:
+                text: "Цель\\n" + str(root.goal)
+                font_name: "Gilroy-Medium"
+                font_size: "14sp"
+                color: 0.7137, 0.5294, 0.5294, 1
+                size_hint: None, None
+                size: 60, 40
+                pos_hint: {"x": 0, "top": 1}
+                halign: "left"
+            
+            # График шагов
+            ActivityChart:
+                size_hint: 1, 0.6
+                data: root.weekly_steps if root.current_view == "Неделя" else (root.monthly_steps if root.current_view == "Месяц" else root.daily_steps)
+            
+            # Текущее значение внизу
+            Label:
+                text: "{} шагов".format(root.steps)
+                font_name: "Gilroy-SemiBold"
+                font_size: "28sp"
+                color: 0.7137, 0.5294, 0.5294, 1
+                size_hint_y: None
+                height: 40
+
+# ===== График для ActivityScreen =====
+<ActivityChart>:
+    data: []
+    
+    canvas:
+        # Горизонтальная линия цели
+        Color:
+            rgba: 0.9, 0.85, 0.8, 0.5
+        Line:
+            points: [self.x, self.y + self.height * 0.8, self.right, self.y + self.height * 0.8]
+            width: 1
+        
+        # Столбцы
+        # (реализация через Python)
 '''
 
 class MainApp(App):
@@ -2998,6 +3592,7 @@ class MainApp(App):
         sm.add_widget(Screen(name="stats_water"))
         sm.add_widget(Screen(name="stats_sleep"))
         sm.add_widget(Screen(name="stats_mood"))
+        sm.add_widget(ActivityScreen(name="activity"))
         return sm
     
     def save_name(self, name):
@@ -3067,6 +3662,12 @@ class MainApp(App):
         self.root.current = "final_result"
     def go_to_summary(self):
         self.root.current = "summary"
+    
+    def go_to_activity(self):
+        # Обновляем данные перед переходом
+        screen = self.root.get_screen("activity")
+        screen.on_pre_enter()
+        self.root.current = "activity"
 
 if __name__ == '__main__':
     MainApp().run()

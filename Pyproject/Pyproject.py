@@ -641,6 +641,8 @@ class ResultStepsScreen(Screen):
 
 class ResultSleepScreen(Screen):
     sleep_hours = NumericProperty(0)
+    sleep_start_time = StringProperty("00:00")  
+    sleep_end_time = StringProperty("00:00")   
 
     def on_pre_enter(self):
         app = App.get_running_app()
@@ -654,11 +656,17 @@ class ResultSleepScreen(Screen):
         
             if start and end:
                 self.sleep_hours = self.calc_sleep(start, end)
+                self.sleep_start_time = start  
+                self.sleep_end_time = end      
                 print(f"Рассчитано часов сна: {self.sleep_hours}")
             else:
                 self.sleep_hours = 0
+                self.sleep_start_time = "00:00"
+                self.sleep_end_time = "00:00"
         else:
             self.sleep_hours = 0
+            self.sleep_start_time = "00:00"
+            self.sleep_end_time = "00:00"
 
     def calc_sleep(self, start, end):
         t1 = datetime.strptime(start, "%H:%M")
@@ -1008,6 +1016,92 @@ class ActivityChart(Widget):
                 )
                 
                 Rectangle(pos=(x, y), size=(bar_width, bar_height))
+
+class SleepDetailScreen(Screen):
+    sleep_hours = NumericProperty(0)
+    sleep_minutes = NumericProperty(0)
+    goal = NumericProperty(8)
+    percentage = NumericProperty(0)
+    
+    sleep_start_time = StringProperty("00:00")
+    sleep_end_time = StringProperty("00:00")
+    
+    # Данные для графика
+    daily_sleep = ListProperty([])
+    weekly_sleep = ListProperty([])
+    monthly_sleep = ListProperty([])
+    
+    current_view = StringProperty("День")
+
+    def on_pre_enter(self):
+        # Загружаем данные
+        key = App.get_running_app().selected_date
+        if daily_store.exists(key):
+            data = daily_store.get(key)
+            start = data.get("sleep_start", "")
+            end = data.get("sleep_end", "")
+            
+            if start and end:
+                total_hours = self.calc_sleep(start, end)
+                self.sleep_hours = int(total_hours)
+                self.sleep_minutes = int((total_hours % 1) * 60)
+                self.sleep_start_time = start
+                self.sleep_end_time = end
+                
+                # Считаем процент от цели
+                self.percentage = min(100, round(total_hours / self.goal * 100))
+        
+        self.load_chart_data()
+    
+    def load_chart_data(self):
+        """Загружаем данные для графиков"""
+        # День - упрощенно
+        self.daily_sleep = [self.sleep_hours + self.sleep_minutes/60]
+        
+        # Неделя - последние 7 дней
+        week_data = []
+        for i in range(6, -1, -1):
+            date = datetime.now() - timedelta(days=i)
+            date_key = date.strftime("%Y-%m-%d")
+            if daily_store.exists(date_key):
+                data = daily_store.get(date_key)
+                start = data.get("sleep_start", "")
+                end = data.get("sleep_end", "")
+                if start and end:
+                    hours = self.calc_sleep(start, end)
+                    week_data.append(hours)
+                else:
+                    week_data.append(0)
+            else:
+                week_data.append(0)
+        self.weekly_sleep = week_data
+
+        # Месяц - последние 4 недели
+        month_data = []
+        for i in range(3, -1, -1):
+            week_sum = 0
+            for j in range(7):
+                date = datetime.now() - timedelta(days=i*7 + j)
+                date_key = date.strftime("%Y-%m-%d")
+                if daily_store.exists(date_key):
+                    data = daily_store.get(date_key)
+                    start = data.get("sleep_start", "")
+                    end = data.get("sleep_end", "")
+                    if start and end:
+                        week_sum += self.calc_sleep(start, end)
+            month_data.append(week_sum / 7)  # Среднее за неделю
+        self.monthly_sleep = month_data
+    
+    def calc_sleep(self, start, end):
+        t1 = datetime.strptime(start, "%H:%M")
+        t2 = datetime.strptime(end, "%H:%M")
+        if t2 <= t1:
+            t2 = t2.replace(day=t2.day + 1)
+        return round((t2 - t1).seconds / 3600, 2)
+    
+    def set_view(self, view):
+        self.current_view = view
+
 
 # KV код как строка
 kv_string = '''
@@ -2704,8 +2798,16 @@ kv_string = '''
         Label:
             text: "Результаты"
             font_size: "32sp"
-            pos_hint: {"x": -0.3, "y": 0.4}
+            pos_hint: {"x": -0.25, "y": 0.4}
             color: 0.7,0.5,0.5,1
+        
+        # Дата
+        Label:
+            text: app.selected_date
+            font_name: "Gilroy-Medium"
+            font_size: "16sp"
+            color: 0.7,0.5,0.5,1
+            pos_hint: {"x": -0.36, "y": 0.36}
 
         Label:
             text: f"{root.sleep_hours} часов"
@@ -2713,18 +2815,93 @@ kv_string = '''
             pos_hint: {"center_x":0.5, "center_y":0.6}
             color: 0.7,0.5,0.5,1
         
-        # Стакан воды (только фон)
+        Label:
+            text: root.sleep_start_time
+            font_name: "Gilroy-Medium"
+            font_size: "16sp"
+            color: 0.7, 0.5, 0.5, 1
+            halign: "left"
+            size_hint: None, None
+            size: 60, 30
+            pos_hint: {"center_x":0.16, "center_y":0.6}
+        
+        Label:
+            text: root.sleep_end_time
+            font_name: "Gilroy-Medium"
+            font_size: "16sp"
+            color: 0.7, 0.5, 0.5, 1
+            halign: "right"
+            size_hint: None, None
+            size: 60, 30
+            pos_hint: {"center_x":0.84, "center_y":0.6}
+
+        # Текст рекомендации
+        Label:
+            text: "Ваш сон был короче рекомендованной\\nнормы. Недостаток отдыха может влиять\\nна настроение и концентрацию."
+            font_name: "Gilroy-Medium"
+            font_size: "16sp"
+            color: 0.7, 0.5, 0.5, 1
+            pos_hint: {"center_x": 0.5, "center_y": 0.45}
+            halign: "center"
+            text_size: self.width - 40, None
+        
+        # Шкала сна
         Image:
             source: "картинка для ResultSleepScreen.png"
-            size_hint: 1.1, 0.78
-            pos_hint: {"center_x": 0.5, "center_y": 0.45}
+            size_hint: 0.8, 0.58
+            pos_hint: {"center_x": 0.5, "center_y": 0.65}
+        
+        # Белый блок с советом
+        BoxLayout:
+            orientation: "vertical"
+            size_hint: 0.9, None
+            height: 150
+            pos_hint: {"center_x": 0.5, "y": 0.12}
+            padding: [20, 15]
+            spacing: 5
+            
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 0.9
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [25]
+            
+            Label:
+                text: "Сегодня постарайтесь лечь спать на 30 минут\\nраньше. Создайте ритуал: проветрите\\nкомнату, отложите гаджеты и почитайте книгу."
+                font_name: "Gilroy-Medium"
+                font_size: "15sp"
+                color: 0.7, 0.5, 0.5, 1
+                halign: "left"
+                valign: "top"
+                text_size: self.width, self.height
 
-        Button:
-            text: ">"
-            pos_hint: {"right":0.95, "y":0.05}
-            size_hint: None,None
-            size: 60,60
-            on_release: app.root.current = "result_mood"
+        # Круглый белый контейнер для кнопки перехода
+        BoxLayout:
+            size_hint: None, None
+            width: 70
+            height: 70
+            pos_hint: {"right": 0.95, "y": 0.03}
+            padding: [0, 0]  # Убираем внутренние отступы
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [35]  # Полностью круглый
+
+            # Кнопка перехода →
+            Button:
+                text: ">"
+                font_size: "32sp"
+                background_normal: ""  # Убираем стандартный фон
+                background_color: (0, 0, 0, 0)  # Делаем полностью прозрачным
+                color: 0.7137, 0.5294, 0.5294, 1
+                size: self.parent.size
+                pos: self.parent.pos
+                on_release: app.root.current = "result_mood"
 
         # ------------------ Нижняя навигация ------------------
         # Контейнер для трех кнопок
@@ -3188,6 +3365,8 @@ kv_string = '''
                     width: 1.0
                     rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
             
+            on_release: app.go_to_sleep_detail()
+            
             RelativeLayout:
                 # Текст "Сон" вверху слева
                 Label:
@@ -3564,6 +3743,222 @@ kv_string = '''
         
         # Столбцы
         # (реализация через Python)
+       
+<SleepDetailScreen>:
+    name: "sleep_detail"
+    
+    FloatLayout:
+        canvas.before:
+            Rectangle:
+                source: "фон для сна и эмоций.png"
+                size: self.size
+                pos: self.pos
+
+        # Заголовок
+        Label:
+            text: "Сон"
+            font_name: "Gilroy-Medium"
+            font_size: "32sp"
+            pos_hint: {"x": -0.35, "y": 0.4}
+            color: 0.7,0.5,0.5,1
+
+        # Кнопка назад
+        Button:
+            text: "<"
+            size_hint: None, None
+            size: 44, 44
+            pos_hint: {"right": 0.92, "top": 0.91}
+            background_normal: ""
+            background_color: 1, 1, 1, 0.5
+            color: 0.7137, 0.5294, 0.5294, 1
+            font_size: "24sp"
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                Ellipse:
+                    pos: self.pos
+                    size: self.size
+            on_release: app.root.current = "summary"
+
+        # Процент от цели
+        Label:
+            text: "{}% от сегодняшней цели!".format(root.percentage)
+            font_name: "Gilroy-MediumItalic"
+            font_size: "20sp"
+            color: 0.7137, 0.5294, 0.5294, 1
+            pos_hint: {"center_x": 0.5, "top": 1.28}
+
+        Label:
+            text: f"{root.sleep_hours} часов"
+            font_size: "14sp"
+            pos_hint: {"center_x":0.5, "center_y":0.6}
+            color: 0.7,0.5,0.5,1
+        
+        Label:
+            text: root.sleep_start_time
+            font_name: "Gilroy-Medium"
+            font_size: "16sp"
+            color: 0.7, 0.5, 0.5, 1
+            halign: "left"
+            size_hint: None, None
+            size: 60, 30
+            pos_hint: {"center_x":0.16, "center_y":0.6}
+        
+        Label:
+            text: root.sleep_end_time
+            font_name: "Gilroy-Medium"
+            font_size: "16sp"
+            color: 0.7, 0.5, 0.5, 1
+            halign: "right"
+            size_hint: None, None
+            size: 60, 30
+            pos_hint: {"center_x":0.84, "center_y":0.6}
+
+        # Шкала сна
+        Image:
+            source: "картинка для ResultSleepScreen.png"
+            size_hint: 0.8, 0.58
+            pos_hint: {"center_x": 0.5, "center_y": 0.65}
+        
+        # ===== БЛОК С ГРАФИКОМ =====
+        BoxLayout:
+            orientation: "vertical"
+            size_hint: 0.9, 0.35
+            pos_hint: {"center_x": 0.5, "y": 0.05}
+            padding: [15, 15]
+            spacing: 10
+            
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 0.9
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [25]
+            
+            # Переключатели День/Неделя/Месяц
+            BoxLayout:
+                orientation: "horizontal"
+                size_hint_y: None
+                height: 40
+                spacing: 10
+                padding: [5, 5]
+
+                Button:
+                    text: "День"
+                    background_normal: ""
+                    background_color: (1.0, 0.9, 0.8, 1) if root.current_view == "День" else (0, 0, 0, 0)
+                    color: 0.7137, 0.5294, 0.5294, 1
+                    font_name: "Gilroy-Medium"
+                    font_size: "16sp"
+                    canvas.before:
+                        Color:
+                            rgba: (1, 0.9, 0.8, 0.5) if root.current_view == "День" else (0, 0, 0, 0)
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [20]
+                    on_release: root.set_view("День")
+                
+                Button:
+                    text: "Неделя"
+                    background_normal: ""
+                    background_color: (1.0, 0.9, 0.8, 1) if root.current_view == "Неделя" else (0, 0, 0, 0)
+                    color: 0.7137, 0.5294, 0.5294, 1
+                    font_name: "Gilroy-Medium"
+                    font_size: "16sp"
+                    canvas.before:
+                        Color:
+                            rgba: (1, 0.9, 0.8, 0.5) if root.current_view == "Неделя" else (0, 0, 0, 0)
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [20]
+                    on_release: root.set_view("Неделя")
+                
+                Button:
+                    text: "Месяц"
+                    background_normal: ""
+                    background_color: (1.0, 0.9, 0.8, 1) if root.current_view == "Месяц" else (0, 0, 0, 0)
+                    color: 0.7137, 0.5294, 0.5294, 1
+                    font_name: "Gilroy-Medium"
+                    font_size: "16sp"
+                    canvas.before:
+                        Color:
+                            rgba: (1, 0.9, 0.8, 0.5) if root.current_view == "Месяц" else (0, 0, 0, 0)
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [20]
+                    on_release: root.set_view("Месяц")
+            
+            # График
+            RelativeLayout:
+                size_hint: 1, 1
+                
+                # Линия цели
+                Widget:
+                    size_hint: None, None
+                    size: root.width - 30, 2
+                    pos: 15, root.height * 0.7
+                    pos_hint: {"center_x": 0.5, "y": 0.05}
+                    canvas:
+                        Color:
+                            rgba: 0.9, 0.85, 0.8, 0.5
+                        Rectangle:
+                            pos: self.pos
+                            size: self.size
+                
+                # Текст "Цель 8 часов"
+                Label:
+                    text: "Цель\\n{} часов".format(root.goal)
+                    font_name: "Gilroy-Medium"
+                    font_size: "12sp"
+                    color: 0.7, 0.5, 0.5, 1
+                    halign: "left"
+                    size_hint: None, None
+                    size: 60, 40
+                    pos: 15, root.height * 0.72
+                    pos_hint: {"x": 0, "y": 0.75}
+                
+                # Столбец графика
+                Widget:
+                    size_hint: None, None
+                    size: 60, root.height * 0.65
+                    pos: root.width - 100, root.y + 60
+                    canvas:
+                        # Фон столбца (светлый)
+                        Color:
+                            rgba: 1.0, 0.8, 0.6, 0.3
+                        Rectangle:
+                            pos: self.pos
+                            size: self.size
+                        
+                        # Заполненный столбец
+                        Color:
+                            rgba: 1.0, 0.7, 0.4, 0.9
+                        Rectangle:
+                            pos: self.x, self.y
+                            size: self.width, self.height * (root.percentage / 100)
+                
+                # Значение часов
+                Label:
+                    text: "{}".format(root.sleep_hours)
+                    font_name: "Gilroy-SemiBold"
+                    font_size: "48sp"
+                    color: 0.7137, 0.5294, 0.5294, 1
+                    size_hint: None, None
+                    size: 80, 60
+                    pos: root.width - 180, root.y + 20
+                
+                Label:
+                    text: "часов"
+                    font_name: "Gilroy-Medium"
+                    font_size: "16sp"
+                    color: 0.7, 0.5, 0.5, 1
+                    size_hint: None, None
+                    size: 60, 30
+                    pos: root.width - 140, root.y + 35
 '''
 
 class MainApp(App):
@@ -3593,6 +3988,7 @@ class MainApp(App):
         sm.add_widget(Screen(name="stats_sleep"))
         sm.add_widget(Screen(name="stats_mood"))
         sm.add_widget(ActivityScreen(name="activity"))
+        sm.add_widget(SleepDetailScreen(name="sleep_detail"))
         return sm
     
     def save_name(self, name):
@@ -3662,12 +4058,15 @@ class MainApp(App):
         self.root.current = "final_result"
     def go_to_summary(self):
         self.root.current = "summary"
-    
     def go_to_activity(self):
         # Обновляем данные перед переходом
         screen = self.root.get_screen("activity")
         screen.on_pre_enter()
         self.root.current = "activity"
+    def go_to_sleep_detail(self):
+        screen = self.root.get_screen("sleep_detail")
+        screen.on_pre_enter()
+        self.root.current = "sleep_detail"
 
 if __name__ == '__main__':
     MainApp().run()
